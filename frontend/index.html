@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Praxis — practice problems, on demand</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">praxis<span class="dot">.</span></div>
+
+    <div class="controls">
+      <input id="topic" type="text" placeholder="Topic — e.g. binary search on answer, tries, DP on trees" />
+      <select id="difficulty" title="Difficulty">
+        <option>Easy</option>
+        <option selected>Medium</option>
+        <option>Hard</option>
+      </select>
+      <button id="generate" class="btn primary">Generate</button>
+    </div>
+
+    <button id="open-settings" class="btn ghost" title="API key settings">⚙ Key</button>
+  </header>
+
+  <main class="split">
+    <!-- Left: problem statement -->
+    <section id="left" class="pane">
+      <div id="problem" class="problem">
+        <div class="empty-state">
+          <h1>Generate a problem to begin</h1>
+          <p>Pick a topic, set difficulty, hit <strong>Generate</strong>. An LLM writes a
+             fresh problem with hidden test cases. Your code runs entirely in your browser.</p>
+          <p class="muted">First run needs an API key — click <strong>⚙ Key</strong>. Your key is
+             stored only in this browser and sent straight to your chosen provider.</p>
+        </div>
+      </div>
+    </section>
+
+    <div id="divider" class="divider" title="Drag to resize"></div>
+
+    <!-- Right: editor + runner -->
+    <section id="right" class="pane">
+      <div class="editor-toolbar">
+        <span id="fn-label" class="fn-label"></span>
+        <div class="spacer"></div>
+        <button id="reset-code" class="btn ghost" disabled>Reset</button>
+        <button id="run" class="btn run" disabled>▶ Run</button>
+      </div>
+      <div id="editor" class="editor"></div>
+      <div id="results" class="results">
+        <div class="results-header">Console</div>
+        <div id="results-body" class="results-body muted">Run your code to see test results.</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Settings modal -->
+  <div id="settings" class="modal hidden">
+    <div class="modal-card">
+      <h2>API key</h2>
+      <p class="muted">Bring your own key. It's saved in this browser's <code>localStorage</code>
+         and sent only to the provider you pick. Nothing is stored on the server.</p>
+
+      <label>Provider</label>
+      <select id="provider">
+        <option value="anthropic">Anthropic (Claude)</option>
+        <option value="openai">OpenAI</option>
+      </select>
+
+      <label>API key</label>
+      <input id="api-key" type="password" placeholder="sk-ant-… or sk-…" autocomplete="off" />
+
+      <label>Model <span class="muted">(optional — blank uses a sensible default)</span></label>
+      <input id="model" type="text" placeholder="e.g. claude-sonnet-4-6 / gpt-4o" autocomplete="off" />
+
+      <div class="modal-actions">
+        <button id="clear-key" class="btn ghost">Clear</button>
+        <div class="spacer"></div>
+        <button id="close-settings" class="btn">Cancel</button>
+        <button id="save-settings" class="btn primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Third-party libs -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+  <script>
+    // Pyodide is loaded lazily on first Run (see app.js).
+    window.PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/";
+    window.MONACO_VS = "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs";
+  </script>
+  <script src="/app.js"></script>
+</body>
+</html>
