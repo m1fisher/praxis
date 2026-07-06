@@ -29,6 +29,16 @@ completely: submitted Python runs in **[Pyodide](https://pyodide.org)** — CPyt
 compiled to WebAssembly — inside the user's own browser tab. The server never
 executes user code. Test cases are checked client-side.
 
+## Trustworthy problems: the reference self-check
+
+LLMs sometimes miscompute an expected output, which would silently fail a
+*correct* solution. To catch this, the model must also return a hidden
+**reference solution**. Before a problem is shown, Praxis runs that reference
+against every test case (in the same in-browser Pyodide sandbox). If any
+`expected` value disagrees with what the reference actually produces, the
+problem failed its own self-check and is regenerated (up to a few attempts).
+The reference solution is used only for this check — it's never displayed.
+
 ---
 
 ## Architecture
@@ -90,8 +100,10 @@ praxis/
 
 ## Notes & caveats
 
-- Generated problems are only as good as the model. Test cases use `==` equality,
-  so problems whose answers allow multiple valid orderings should pin a canonical
-  order (the prompt asks the model to do this).
+- The reference self-check catches problems whose `expected` values are
+  internally inconsistent, but not a model that misunderstands the task the same
+  way in both its reference solution and its tests. A stronger model reduces both.
+- Test cases use `==` equality, so problems whose answers allow multiple valid
+  orderings should pin a canonical order (the prompt asks the model to do this).
 - BYOK keys live in `localStorage` — fine for a personal tool; if you deploy this
   for others, serve it over HTTPS.

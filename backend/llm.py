@@ -17,11 +17,12 @@ from .prompts import SYSTEM_PROMPT, build_user_prompt
 # lets them override with any model string their key can access.
 DEFAULT_MODELS = {
     "anthropic": "claude-sonnet-4-6",
-    "openai": "gpt-4o",
+    "openai": "gpt-5.4-mini",
 }
 
 # Guardrail: cap output so a bad key/model can't run up a huge bill on one call.
-MAX_OUTPUT_TOKENS = 4000
+# Roomy enough for the problem plus a full reference solution.
+MAX_OUTPUT_TOKENS = 6000
 
 REQUIRED_FIELDS = ("title", "description", "function_name", "starter_code", "tests")
 
@@ -117,7 +118,9 @@ def _parse_problem(text: str) -> dict[str, Any]:
         raise LLMError("The model did not return valid JSON.", status=502)
 
     try:
-        data = json.loads(text[start : end + 1])
+        # strict=False tolerates literal control chars (e.g. raw newlines inside
+        # a string), which models occasionally emit in code snippets.
+        data = json.loads(text[start : end + 1], strict=False)
     except json.JSONDecodeError as e:
         raise LLMError(f"Could not parse the generated problem: {e}", status=502) from None
 

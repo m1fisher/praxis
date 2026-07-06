@@ -28,6 +28,9 @@ The JSON object MUST have exactly these fields:
   "function_name": string,       // snake_case Python identifier the user implements
   "starter_code": string,        // Python function stub, e.g.
                                  // "def two_sum(nums, target):\\n    # your code here\\n    pass"
+  "reference_solution": string,  // a COMPLETE, CORRECT Python implementation of
+                                 // function_name (NOT a stub). Same signature as
+                                 // starter_code.
   "tests": [                     // 4-8 deterministic test cases
     { "input": [ ...positional args... ], "expected": <any JSON value> }
   ]
@@ -44,6 +47,15 @@ Hard requirements for the tests — these run automatically in a sandbox:
   lists, dicts, tuples-as-lists). Avoid problems whose answer is "any valid
   ordering" unless you fix a canonical order in the description.
 - starter_code must define exactly the function named function_name.
+
+CRITICAL self-consistency requirement:
+- reference_solution is a full, correct implementation, not a stub.
+- For EVERY test, reference_solution(*input) MUST return exactly "expected".
+  Mentally execute your reference solution on each input and set "expected" to
+  its actual return value. Do not guess. Your tests will be run against your
+  reference solution automatically; if any "expected" is wrong, the problem is
+  rejected.
+- Any worked "examples" you show must agree with the reference solution too.
 
 Return ONLY the JSON object."""
 

@@ -17,6 +17,9 @@ let editor = null;
 let pyodide = null;      // lazily loaded
 let pyodideLoading = null;
 
+// How many times to regenerate if a problem fails its own reference self-check.
+const MAX_GEN_ATTEMPTS = 3;
+
 // ---------- toast ----------
 let toastTimer = null;
 function toast(msg) {
@@ -72,6 +75,23 @@ function initEditor() {
 }
 
 // ---------- generate ----------
+async function fetchProblem(topic, difficulty) {
+  const res = await fetch("/api/generate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Provider": LS.provider,
+      "X-Api-Key": LS.key,
+    },
+    body: JSON.stringify({ topic, difficulty, model: LS.model || null }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Request failed (${res.status}).`);
+  }
+  return res.json();
+}
+
 async function generate() {
   const topic = $("topic").value.trim();
   if (!topic) { toast("Enter a topic first."); return; }
@@ -80,37 +100,51 @@ async function generate() {
   const btn = $("generate");
   const original = btn.textContent;
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>Generating…';
 
   try {
-    const res = await fetch("/api/generate", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Provider": LS.provider,
-        "X-Api-Key": LS.key,
-      },
-      body: JSON.stringify({
-        topic,
-        difficulty: $("difficulty").value,
-        model: LS.model || null,
-      }),
-    });
+    const difficulty = $("difficulty").value;
+    let problem = null;
+    let verified = false;
+    let unverifiable = false;
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Request failed (${res.status}).`);
+    // Generate, then self-check the model's own reference solution against its
+    // test cases. If they disagree, the model miscomputed something — regenerate.
+    for (let attempt = 1; attempt <= MAX_GEN_ATTEMPTS; attempt++) {
+      btn.innerHTML = `<span class="spinner"></span>${attempt === 1 ? "Generating…" : `Regenerating… (${attempt})`}`;
+      problem = await fetchProblem(topic, difficulty);
+
+      const fn = safeIdent(problem.function_name);
+      if (!problem.reference_solution || !fn) { unverifiable = true; break; }
+
+      try {
+        await ensurePyodide();
+      } catch {
+        unverifiable = true; // runtime unavailable — show the problem unverified
+        break;
+      }
+
+      try {
+        const { cases } = await evaluate(problem.reference_solution, fn, problem.tests, false);
+        if (cases.length && cases.every((c) => c.ok)) { verified = true; break; }
+      } catch {
+        // reference solution failed to even run — fall through and regenerate
+      }
     }
 
-    currentProblem = await res.json();
-    renderProblem(currentProblem);
-    if (editor) editor.setValue(currentProblem.starter_code || "");
+    currentProblem = problem;
+    renderProblem(problem);
+    if (editor) editor.setValue(problem.starter_code || "");
     $("run").disabled = false;
     $("reset-code").disabled = false;
-    $("fn-label").textContent = currentProblem.function_name
-      ? `def ${currentProblem.function_name}(…)`
-      : "";
-    setResults('<span class="muted">Ready. Write your solution and hit Run.</span>');
+    $("fn-label").textContent = problem.function_name ? `def ${problem.function_name}(…)` : "";
+
+    if (verified) {
+      setResults('<div class="summary pass">✓ self-checked</div><span class="muted">The reference solution passes all hidden tests. Write yours and hit Run.</span>');
+    } else if (unverifiable) {
+      setResults('<span class="muted">Ready. (Couldn\'t self-verify — no runtime or reference solution.) Write your solution and hit Run.</span>');
+    } else {
+      setResults('<div class="summary fail">⚠ unverified</div><span class="muted">This problem failed its own self-check after several tries — the expected outputs may be off. Consider regenerating, or treat test results with caution.</span>');
+    }
   } catch (e) {
     toast(e.message);
   } finally {
@@ -150,12 +184,11 @@ function renderProblem(p) {
 function setResults(html) { $("results-body").innerHTML = html; }
 
 // ---------- Pyodide runner ----------
+// UI-silent: safe to call eagerly in the background at startup.
 async function ensurePyodide() {
   if (pyodide) return pyodide;
   if (!pyodideLoading) {
-    setResults('<span class="spinner"></span> Loading the Python runtime (first run only)…');
     pyodideLoading = (async () => {
-      // loadPyodide is provided by the pyodide.js script we inject here.
       await new Promise((resolve, reject) => {
         const s = document.createElement("script");
         s.src = window.PYODIDE_URL + "pyodide.js";
@@ -174,30 +207,15 @@ function safeIdent(name) {
   return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name || "") ? name : null;
 }
 
-async function runCode() {
-  if (!currentProblem) return;
-  const fn = safeIdent(currentProblem.function_name);
-  if (!fn) { toast("This problem has an invalid function name."); return; }
-
-  const runBtn = $("run");
-  runBtn.disabled = true;
-  const userCode = editor.getValue();
-
-  try {
-    const py = await ensurePyodide();
-    setResults('<span class="spinner"></span> Running tests…');
-
-    // Capture stdout from the user's own print() calls.
-    let stdout = "";
-    py.setStdout({ batched: (s) => { stdout += s + "\n"; } });
-
-    // 1) Define the user's function.
-    await py.runPythonAsync(userCode);
-
-    // 2) Feed the test cases in as a Python object, then run the harness.
-    py.globals.set("_tests", py.toPy(currentProblem.tests || []));
-    const harness = `
-import json as _json
+// Python harness: define the candidate function (via `code`), then call it on
+// every test input and compare to `expected`. Tests are passed as base64 JSON
+// so no delimiter/escaping in the data can break the source. The last
+// expression is a JSON string of per-case results.
+function buildHarness(fn, tests) {
+  const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(tests || []))));
+  return `
+import json as _json, base64 as _b64
+_tests = _json.loads(_b64.b64decode("${b64}").decode("utf-8"))
 _fn = globals().get(${JSON.stringify(fn)})
 _out = []
 if not callable(_fn):
@@ -214,8 +232,36 @@ else:
                          "input": list(_args), "error": repr(_e)})
 _json.dumps(_out, default=repr)
 `;
-    const resultsJson = await py.runPythonAsync(harness);
-    renderResults(JSON.parse(resultsJson), stdout);
+}
+
+// Run `code` (which must define `fn`) against `tests` in a FRESH namespace, so
+// reference-check runs and user runs never leak state into one another.
+async function evaluate(code, fn, tests, capture) {
+  const py = await ensurePyodide();
+  let stdout = "";
+  py.setStdout({ batched: capture ? (s) => { stdout += s + "\n"; } : () => {} });
+
+  const ns = py.toPy({}); // fresh Python dict used as module globals
+  try {
+    const resultsJson = await py.runPythonAsync(code + "\n" + buildHarness(fn, tests), { globals: ns });
+    return { cases: JSON.parse(resultsJson), stdout };
+  } finally {
+    ns.destroy();
+  }
+}
+
+async function runCode() {
+  if (!currentProblem) return;
+  const fn = safeIdent(currentProblem.function_name);
+  if (!fn) { toast("This problem has an invalid function name."); return; }
+
+  const runBtn = $("run");
+  runBtn.disabled = true;
+  try {
+    await ensurePyodide();
+    setResults('<span class="spinner"></span> Running tests…');
+    const { cases, stdout } = await evaluate(editor.getValue(), fn, currentProblem.tests, true);
+    renderResults(cases, stdout);
   } catch (e) {
     // Syntax errors / exceptions raised while defining the function land here.
     setResults(`<div class="summary fail">Error</div><div class="case fail"><div class="row">${esc(e.message || e)}</div></div>`);
@@ -281,6 +327,10 @@ window.addEventListener("DOMContentLoaded", () => {
   $("save-settings").addEventListener("click", saveSettings);
   $("clear-key").addEventListener("click", clearKey);
   $("settings").addEventListener("click", (e) => { if (e.target.id === "settings") closeSettings(); });
+
+  // Warm up the Python runtime in the background so the first problem's
+  // self-check (and the first Run) don't wait on the download.
+  ensurePyodide().catch(() => {});
 
   if (!LS.key) openSettings();
 });
