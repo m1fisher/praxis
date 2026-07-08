@@ -21,6 +21,15 @@ FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 app = FastAPI(title="Praxis", description="LLM-generated LeetCode-style practice.")
 
 
+@app.middleware("http")
+async def no_store(request, call_next):
+    """Disable browser caching so edits to the static frontend show up on reload.
+    Fine for a local/dev tool; add real caching + asset versioning for prod."""
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 class Mismatch(BaseModel):
     """One failing self-check case: the reference disagreed with `expected`."""
 

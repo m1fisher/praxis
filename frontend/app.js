@@ -101,22 +101,24 @@ function setProgressStage(stage) {
 function showStage({ stage, attempt, model, detail }) {
   setProgressStage(stage === "checking" ? "checking" : "writing");
   const steps = [
-    { label: attempt > 1 ? "Repair" : "Write", state: stage === "checking" ? "done" : "active" },
-    { label: "Self-check", state: stage === "checking" ? "active" : "pending" },
+    { label: attempt > 1 ? "Repair the problem" : "Write the problem",
+      state: stage === "checking" ? "done" : "active" },
+    { label: "Self-check the answer key",
+      state: stage === "checking" ? "active" : "pending" },
   ];
-  const glyph = (st) =>
-    st === "done" ? '<span class="sdot done">✓</span>'
-    : st === "active" ? '<span class="sdot spin"></span>'
-    : '<span class="sdot pending">○</span>';
-  const stepper = steps
-    .map((s) => `<div class="step ${s.state}">${glyph(s.state)}${esc(s.label)}</div>`)
-    .join('<span class="step-sep">→</span>');
-  const attemptLine = attempt > 1 ? `<div class="gen-attempt">Attempt ${attempt} of ${MAX_GEN_ATTEMPTS}</div>` : "";
+  const icon = (st) =>
+    st === "done" ? '<span class="cl-ico done">✓</span>'
+    : st === "active" ? '<span class="cl-ico spin"></span>'
+    : '<span class="cl-ico pending"></span>';
+  const rows = steps
+    .map((s) => `<div class="cl-row ${s.state}">${icon(s.state)}<span class="cl-label">${esc(s.label)}</span></div>`)
+    .join("");
+  const attemptBadge = attempt > 1 ? `<div class="gen-attempt">Attempt ${attempt} of ${MAX_GEN_ATTEMPTS}</div>` : "";
   $("problem").innerHTML = `
     <div class="gen-state">
-      <div class="stepper">${stepper}</div>
+      <div class="checklist">${rows}</div>
       <div class="gen-phase">${esc(detail)}</div>
-      ${attemptLine}
+      ${attemptBadge}
       <div class="model-chip">via <code>${esc(model)}</code></div>
     </div>`;
 }
@@ -305,22 +307,26 @@ function safeIdent(name) {
 function buildHarness(fn, tests) {
   const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(tests || []))));
   return `
-import json as _json, base64 as _b64
+import json as _json, base64 as _b64, io as _io, contextlib as _ctx
 _tests = _json.loads(_b64.b64decode("${b64}").decode("utf-8"))
 _fn = globals().get(${JSON.stringify(fn)})
 _out = []
 if not callable(_fn):
-    _out = [{"ok": False, "error": "Function '${fn}' is not defined.", "input": None, "expected": None, "got": None}]
+    _out = [{"ok": False, "error": "Function '${fn}' is not defined.", "input": None, "expected": None, "got": None, "stdout": ""}]
 else:
     for _t in _tests:
         _args = _t["input"] if isinstance(_t["input"], (list, tuple)) else [_t["input"]]
+        _buf = _io.StringIO()  # capture this call's prints, tied to this test
         try:
-            _got = _fn(*_args)
+            with _ctx.redirect_stdout(_buf):
+                _got = _fn(*_args)
             _out.append({"ok": _got == _t["expected"], "got": _got,
-                         "expected": _t["expected"], "input": list(_args), "error": None})
+                         "expected": _t["expected"], "input": list(_args),
+                         "error": None, "stdout": _buf.getvalue()})
         except Exception as _e:
             _out.append({"ok": False, "got": None, "expected": _t["expected"],
-                         "input": list(_args), "error": repr(_e)})
+                         "input": list(_args), "error": repr(_e),
+                         "stdout": _buf.getvalue()})
 _json.dumps(_out, default=repr)
 `;
 }
@@ -371,16 +377,19 @@ function renderResults(cases, stdout) {
   const allPass = passed === total;
 
   let html = `<div class="summary ${allPass ? "pass" : "fail"}">${allPass ? "✓ Accepted" : "✗ Wrong Answer"} — ${passed}/${total} tests passed</div>`;
+  // Module-level prints (outside the function) — rare; per-test prints show in-case.
   if (stdout && stdout.trim()) {
-    html += `<div class="stdout"><span class="muted">stdout</span>\n${esc(stdout.trimEnd())}</div>`;
+    html += `<div class="stdout"><span class="muted">module output</span>\n${esc(stdout.trimEnd())}</div>`;
   }
   cases.forEach((c, i) => {
+    const out = (c.stdout || "").replace(/\s+$/, "");
     html += `<div class="case ${c.ok ? "pass" : "fail"}">
       <div class="row"><span class="k">Test ${i + 1}:</span> ${c.ok ? "✓ passed" : "✗ failed"}</div>
       ${c.input !== null ? `<div class="row"><span class="k">input:</span> ${esc(fmt(c.input))}</div>` : ""}
       ${!c.ok && c.error ? `<div class="row"><span class="k">error:</span> ${esc(c.error)}</div>` : ""}
       ${!c.ok && !c.error ? `<div class="row"><span class="k">expected:</span> ${esc(fmt(c.expected))}</div>
         <div class="row"><span class="k">got:</span> ${esc(fmt(c.got))}</div>` : ""}
+      ${out ? `<div class="row case-stdout"><span class="k">stdout:</span>\n${esc(out)}</div>` : ""}
     </div>`;
   });
   setResults(html);

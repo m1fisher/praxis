@@ -119,6 +119,7 @@ input:focus, select:focus { border-color: var(--accent); }
 .case .row { white-space: pre-wrap; word-break: break-word; }
 .case .k { color: var(--muted); }
 .stdout { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; white-space: pre-wrap; }
+.case-stdout { margin-top: 6px; padding: 6px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--muted); }
 
 /* ---- Modal ---- */
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 100; }
@@ -152,19 +153,20 @@ input:focus, select:focus { border-color: var(--accent); }
 .gen-phase { font-size: 15px; margin-bottom: 14px; }
 .gen-attempt { font-size: 12px; color: var(--amber); margin-bottom: 12px; }
 
-/* ---- Stage stepper ---- */
-.stepper { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 14px; }
-.step { display: inline-flex; align-items: center; font-size: 13px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); background: var(--panel-2); }
-.step.active { color: #fff; background: var(--accent); border-color: var(--accent); }
-.step.done { color: var(--green); border-color: rgba(63,185,80,.4); }
-.step.pending { opacity: .45; border-style: dashed; }
-.step-sep { color: var(--muted); }
+/* ---- Stage checklist ---- */
+.checklist { display: inline-flex; flex-direction: column; gap: 16px; text-align: left; margin: 0 auto 22px; }
+.cl-row { display: flex; align-items: center; gap: 12px; font-size: 15px; transition: opacity .2s; }
+.cl-label { line-height: 1; }
+.cl-row.pending .cl-label { color: var(--muted); }
+.cl-row.active  .cl-label { color: var(--text); font-weight: 600; }
+.cl-row.done    .cl-label { color: var(--muted); }
 
-/* per-step status marker */
-.sdot { display: inline-block; width: 12px; text-align: center; margin-right: 6px; }
-.sdot.done { color: var(--green); }
-.sdot.pending { color: var(--muted); }
-.sdot.spin { width: 11px; height: 11px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
+/* status icon (fixed 22px circle) */
+.cl-ico { width: 22px; height: 22px; flex: 0 0 auto; box-sizing: border-box; border-radius: 50%;
+          display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+.cl-ico.pending { border: 2px solid var(--border); }
+.cl-ico.spin    { border: 2px solid rgba(47,129,247,.28); border-top-color: var(--accent); animation: spin .7s linear infinite; }
+.cl-ico.done    { background: var(--green); color: #04140a; }
 
 /* ---- Model chip ---- */
 .model-chip { color: var(--muted); font-size: 13px; }
