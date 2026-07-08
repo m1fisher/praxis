@@ -125,7 +125,17 @@ input:focus, select:focus { border-color: var(--accent); }
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 100; }
 .modal.hidden { display: none; }
 .modal-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 22px 24px; width: 440px; max-width: 92vw; }
+.modal-card.modal-wide { width: 560px; }
 .modal-card h2 { margin-top: 0; }
+
+/* saved-problems list */
+.saved-list { max-height: 52vh; overflow-y: auto; margin-top: 10px; }
+.saved-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; }
+.saved-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.saved-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.saved-topic, .saved-when { font-size: 12px; white-space: nowrap; }
+.saved-when { margin-left: auto; }
+.saved-actions { display: flex; gap: 6px; flex: 0 0 auto; }
 .modal-card label { display: block; margin: 14px 0 6px; font-size: 13px; font-weight: 600; }
 .modal-card input, .modal-card select { width: 100%; }
 .modal-actions { display: flex; gap: 8px; margin-top: 20px; align-items: center; }

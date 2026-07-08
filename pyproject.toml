@@ -27,5 +27,5 @@ testpaths = ["tests"]
 addopts = "-q"
 filterwarnings = [
     # Cosmetic: Starlette's TestClient nags about an httpx2 migration.
-    "ignore:Using `httpx` with `starlette.testclient`:DeprecationWarning",
+    "ignore:Using `httpx` with `starlette.testclient`",
 ]

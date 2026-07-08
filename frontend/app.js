@@ -217,12 +217,7 @@ async function generate() {
       };
     }
 
-    currentProblem = problem;
-    renderProblem(problem);
-    if (editor) editor.setValue(problem.starter_code || "");
-    $("run").disabled = false;
-    $("reset-code").disabled = false;
-    $("fn-label").textContent = problem.function_name ? `def ${problem.function_name}(…)` : "";
+    applyProblem(problem);
 
     if (verified) {
       setResults('<div class="summary pass">✓ self-checked</div><span class="muted">The reference solution passes all hidden tests. Write yours and hit Run.</span>');
@@ -275,6 +270,164 @@ function renderProblem(p) {
 
 // ---------- results panel ----------
 function setResults(html) { $("results-body").innerHTML = html; }
+
+// ---------- apply a problem to the workspace ----------
+function applyProblem(problem, code) {
+  currentProblem = problem;
+  renderProblem(problem);
+  if (editor) editor.setValue(code != null ? code : (problem.starter_code || ""));
+  $("run").disabled = false;
+  $("reset-code").disabled = false;
+  $("save-problem").disabled = false;
+  $("fn-label").textContent = problem.function_name ? `def ${problem.function_name}(…)` : "";
+}
+
+// ---------- saved library (localStorage) ----------
+const SAVED_KEY = "praxis.saved";
+
+function loadLibrary() {
+  try {
+    const v = JSON.parse(localStorage.getItem(SAVED_KEY) || "[]");
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+function saveLibrary(arr) { localStorage.setItem(SAVED_KEY, JSON.stringify(arr)); }
+function removeSaved(id) { saveLibrary(loadLibrary().filter((e) => e.id !== id)); }
+function newId() { return `p_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`; }
+
+function makeEntry(problem, code) {
+  return {
+    id: newId(),
+    savedAt: new Date().toISOString(),
+    title: problem.title || "Untitled",
+    difficulty: problem.difficulty || "Medium",
+    topic: problem.topic || "",
+    model: problem.model || "",
+    problem,          // full problem (statement, tests, reference, …)
+    code: code || "", // the user's solution at save time
+  };
+}
+
+// An entry is usable only if it carries a runnable problem.
+function isValidEntry(e) {
+  return !!(e && e.problem && typeof e.problem.function_name === "string"
+    && Array.isArray(e.problem.tests) && typeof e.problem.starter_code === "string");
+}
+
+function saveCurrent() {
+  if (!currentProblem) return;
+  const lib = loadLibrary();
+  lib.unshift(makeEntry(currentProblem, editor ? editor.getValue() : ""));
+  saveLibrary(lib);
+  toast(`Saved “${currentProblem.title || "problem"}” to your library.`);
+}
+
+function exportLibrary() {
+  const lib = loadLibrary();
+  if (!lib.length) { toast("Nothing saved yet."); return; }
+  const blob = new Blob([JSON.stringify(lib, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "praxis-saved.json";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Merge an exported file into the library; returns how many were imported.
+function importLibrary(text) {
+  let data;
+  try { data = JSON.parse(text); } catch { throw new Error("That file isn't valid JSON."); }
+  const incoming = Array.isArray(data) ? data : [data];
+  const existing = new Set(loadLibrary().map((e) => e.id));
+  const valid = incoming.filter(isValidEntry).map((e) => ({
+    ...e,
+    id: e.id && !existing.has(e.id) ? e.id : newId(), // avoid id collisions
+    savedAt: e.savedAt || new Date().toISOString(),
+    title: e.title || e.problem.title || "Untitled",
+    difficulty: e.difficulty || e.problem.difficulty || "Medium",
+    topic: e.topic || e.problem.topic || "",
+    code: typeof e.code === "string" ? e.code : "",
+  }));
+  if (!valid.length) throw new Error("No valid saved problems in that file.");
+  saveLibrary([...valid, ...loadLibrary()]);
+  return valid.length;
+}
+
+async function onImportFile(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = ""; // allow re-importing the same file
+  if (!file) return;
+  try {
+    const n = importLibrary(await file.text());
+    renderSavedList();
+    toast(`Imported ${n} problem${n === 1 ? "" : "s"}.`);
+  } catch (e) {
+    toast(e.message);
+  }
+}
+
+// ---------- saved modal ----------
+function openSavedModal() { renderSavedList(); $("saved-modal").classList.remove("hidden"); }
+function closeSavedModal() { $("saved-modal").classList.add("hidden"); }
+
+function renderSavedList() {
+  const lib = loadLibrary();
+  const body = $("saved-list");
+  if (!lib.length) {
+    body.innerHTML = '<p class="muted">No saved problems yet. Generate one and hit ★ Save.</p>';
+    return;
+  }
+  body.innerHTML = lib.map((e) => {
+    const diff = ["Easy", "Medium", "Hard"].includes(e.difficulty) ? e.difficulty : "Medium";
+    return `<div class="saved-row">
+      <div class="saved-main">
+        <span class="badge ${diff}">${diff}</span>
+        <span class="saved-title">${esc(e.title || "Untitled")}</span>
+        ${e.topic ? `<span class="muted saved-topic">· ${esc(e.topic)}</span>` : ""}
+        <span class="muted saved-when">${esc((e.savedAt || "").slice(0, 10))}</span>
+      </div>
+      <div class="saved-actions">
+        <button class="btn ghost saved-open" data-id="${esc(e.id)}">Open</button>
+        <button class="btn ghost saved-del" data-id="${esc(e.id)}">Delete</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function onSavedListClick(ev) {
+  const openBtn = ev.target.closest(".saved-open");
+  const delBtn = ev.target.closest(".saved-del");
+  if (openBtn) {
+    const entry = loadLibrary().find((x) => x.id === openBtn.dataset.id);
+    if (entry) openSaved(entry);
+  } else if (delBtn) {
+    removeSaved(delBtn.dataset.id);
+    renderSavedList();
+  }
+}
+
+// Load a saved problem back into the workspace and re-run its self-check.
+async function openSaved(entry) {
+  closeSavedModal();
+  applyProblem(entry.problem, entry.code != null ? entry.code : (entry.problem.starter_code || ""));
+
+  const fn = safeIdent(entry.problem.function_name);
+  if (entry.problem.reference_solution && fn) {
+    try {
+      await ensurePyodide();
+      const { cases } = await evaluate(entry.problem.reference_solution, fn, entry.problem.tests, false);
+      const ok = cases.length && cases.every((c) => c.ok);
+      setResults(ok
+        ? '<div class="summary pass">✓ loaded — self-check still passes</div><span class="muted">Your saved code is in the editor. Hit Run.</span>'
+        : '<div class="summary fail">⚠ loaded — self-check fails now</div><span class="muted">This saved problem no longer agrees with its reference; treat results with caution.</span>');
+      return;
+    } catch { /* runtime unavailable — fall through */ }
+  }
+  setResults('<span class="muted">Loaded a saved problem. Write/adjust your solution and hit Run.</span>');
+}
 
 // ---------- Pyodide runner ----------
 // UI-silent: safe to call eagerly in the background at startup.
@@ -427,6 +580,16 @@ window.addEventListener("DOMContentLoaded", () => {
   $("save-settings").addEventListener("click", saveSettings);
   $("clear-key").addEventListener("click", clearKey);
   $("settings").addEventListener("click", (e) => { if (e.target.id === "settings") closeSettings(); });
+
+  // saved library
+  $("save-problem").addEventListener("click", saveCurrent);
+  $("open-saved").addEventListener("click", openSavedModal);
+  $("close-saved").addEventListener("click", closeSavedModal);
+  $("saved-modal").addEventListener("click", (e) => { if (e.target.id === "saved-modal") closeSavedModal(); });
+  $("export-lib").addEventListener("click", exportLibrary);
+  $("import-lib").addEventListener("click", () => $("import-file").click());
+  $("import-file").addEventListener("change", onImportFile);
+  $("saved-list").addEventListener("click", onSavedListClick);
 
   updateModelIndicator();
 

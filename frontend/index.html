@@ -22,6 +22,7 @@
       <span id="model-indicator" class="model-chip topbar-chip" title="Model used for generation"></span>
     </div>
 
+    <button id="open-saved" class="btn ghost" title="Saved problems">★ Saved</button>
     <button id="open-settings" class="btn ghost" title="API key settings">⚙ Key</button>
   </header>
 
@@ -49,6 +50,7 @@
       <div class="editor-toolbar">
         <span id="fn-label" class="fn-label"></span>
         <div class="spacer"></div>
+        <button id="save-problem" class="btn ghost" disabled title="Save this problem to your library">★ Save</button>
         <button id="reset-code" class="btn ghost" disabled>Reset</button>
         <button id="run" class="btn run" disabled>▶ Run</button>
       </div>
@@ -84,6 +86,22 @@
         <div class="spacer"></div>
         <button id="close-settings" class="btn">Cancel</button>
         <button id="save-settings" class="btn primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Saved problems modal -->
+  <div id="saved-modal" class="modal hidden">
+    <div class="modal-card modal-wide">
+      <h2>Saved problems</h2>
+      <p class="muted">Stored in this browser. Each save keeps the problem and your solution code.</p>
+      <div id="saved-list" class="saved-list"></div>
+      <div class="modal-actions">
+        <button id="export-lib" class="btn ghost" title="Download your library as JSON">Export</button>
+        <button id="import-lib" class="btn ghost" title="Merge a JSON library file">Import</button>
+        <input id="import-file" type="file" accept="application/json,.json" hidden />
+        <div class="spacer"></div>
+        <button id="close-saved" class="btn">Close</button>
       </div>
     </div>
   </div>
