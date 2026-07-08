@@ -86,11 +86,23 @@ praxis/
 │   ├── main.py           # FastAPI app: /api/generate + static hosting
 │   ├── llm.py            # BYOK provider layer (Anthropic + OpenAI)
 │   └── prompts.py        # problem-generation prompt & JSON schema
-└── frontend/
-    ├── index.html
-    ├── style.css
-    └── app.js            # editor, generate, Pyodide test runner
+├── frontend/
+│   ├── index.html
+│   ├── style.css
+│   └── app.js            # editor, generate, Pyodide test runner
+└── tests/                # pytest suite (prompts, parsing, API, grading harness)
 ```
+
+## Tests
+
+```bash
+uv run pytest
+```
+
+Covers prompt construction, LLM response parsing/validation, provider
+dispatch and error→HTTP-status mapping (SDKs mocked — no network, no keys), the
+FastAPI endpoints, and a contract test mirroring the in-browser grading harness.
+Frontend/DOM behavior isn't covered yet (would need a JS test runner).
 
 ## Roadmap ideas
 
