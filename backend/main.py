@@ -8,6 +8,7 @@ for a single call. Nothing about the key is persisted or logged.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -20,10 +21,27 @@ FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 app = FastAPI(title="Praxis", description="LLM-generated LeetCode-style practice.")
 
 
+class Mismatch(BaseModel):
+    """One failing self-check case: the reference disagreed with `expected`."""
+
+    input: Any = None
+    expected: Any = None
+    got: Any = None
+    error: str | None = None
+
+
+class RepairContext(BaseModel):
+    """Hands a failed problem back to the model to fix rather than regenerate."""
+
+    problem: dict
+    mismatches: list[Mismatch]
+
+
 class GenerateRequest(BaseModel):
     topic: str = Field(..., min_length=1, max_length=200)
     difficulty: str = "Medium"
     model: str | None = None
+    repair: RepairContext | None = None
 
 
 @app.post("/api/generate")
@@ -42,6 +60,7 @@ def generate(
             model=req.model,
             topic=req.topic,
             difficulty=req.difficulty,
+            repair=req.repair,
         )
     except LLMError as e:
         raise HTTPException(status_code=e.status, detail=str(e)) from None

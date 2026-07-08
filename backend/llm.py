@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .prompts import SYSTEM_PROMPT, build_user_prompt
+from .prompts import SYSTEM_PROMPT, build_user_prompt, build_repair_prompt
 
 # Sensible defaults when the user doesn't pick a specific model. These are the
 # user's tokens (BYOK), so we default to strong-but-economical models; the UI
@@ -20,9 +20,12 @@ DEFAULT_MODELS = {
     "openai": "gpt-5.4-mini",
 }
 
-# Guardrail: cap output so a bad key/model can't run up a huge bill on one call.
-# Roomy enough for the problem plus a full reference solution.
-MAX_OUTPUT_TOKENS = 6000
+# Anthropic's Messages API *requires* max_tokens, so we must pass one. This is a
+# generous hard ceiling (a problem + full reference solution is well under this)
+# — not a tight budget — so it never truncates valid output. OpenAI is left
+# uncapped: on GPT-5-series the cap is `max_completion_tokens` and counts
+# reasoning tokens, so a tight limit there would do more harm than good.
+ANTHROPIC_MAX_TOKENS = 16000
 
 REQUIRED_FIELDS = ("title", "description", "function_name", "starter_code", "tests")
 
@@ -36,31 +39,47 @@ class LLMError(Exception):
 
 
 def generate_problem(
-    *, provider: str, api_key: str, model: str | None, topic: str, difficulty: str
+    *,
+    provider: str,
+    api_key: str,
+    model: str | None,
+    topic: str,
+    difficulty: str,
+    repair: Any = None,
 ) -> dict[str, Any]:
     provider = (provider or "").strip().lower()
     model = (model or "").strip() or DEFAULT_MODELS.get(provider)
 
+    # On a repair pass, hand the model its own problem plus the self-check
+    # mismatches and ask it to fix them — rather than starting over.
+    if repair is not None:
+        mismatches = [m.model_dump() for m in repair.mismatches]
+        user_prompt = build_repair_prompt(repair.problem, mismatches)
+    else:
+        user_prompt = build_user_prompt(topic, difficulty)
+
     if provider == "anthropic":
-        raw = _call_anthropic(api_key, model, topic, difficulty)
+        raw = _call_anthropic(api_key, model, user_prompt)
     elif provider == "openai":
-        raw = _call_openai(api_key, model, topic, difficulty)
+        raw = _call_openai(api_key, model, user_prompt)
     else:
         raise LLMError(f"Unknown provider: {provider!r}", status=400)
 
-    return _parse_problem(raw)
+    problem = _parse_problem(raw)
+    problem["model"] = model  # echo the resolved model so the UI can show it
+    return problem
 
 
-def _call_anthropic(api_key: str, model: str, topic: str, difficulty: str) -> str:
+def _call_anthropic(api_key: str, model: str, user_prompt: str) -> str:
     import anthropic
 
     client = anthropic.Anthropic(api_key=api_key)
     try:
         resp = client.messages.create(
             model=model,
-            max_tokens=MAX_OUTPUT_TOKENS,
+            max_tokens=ANTHROPIC_MAX_TOKENS,
             system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": build_user_prompt(topic, difficulty)}],
+            messages=[{"role": "user", "content": user_prompt}],
         )
     except anthropic.AuthenticationError:
         raise LLMError("Invalid Anthropic API key.", status=401) from None
@@ -76,7 +95,7 @@ def _call_anthropic(api_key: str, model: str, topic: str, difficulty: str) -> st
     return "".join(block.text for block in resp.content if block.type == "text")
 
 
-def _call_openai(api_key: str, model: str, topic: str, difficulty: str) -> str:
+def _call_openai(api_key: str, model: str, user_prompt: str) -> str:
     import openai
 
     client = openai.OpenAI(api_key=api_key)
@@ -86,7 +105,7 @@ def _call_openai(api_key: str, model: str, topic: str, difficulty: str) -> str:
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": build_user_prompt(topic, difficulty)},
+                {"role": "user", "content": user_prompt},
             ],
         )
     except openai.AuthenticationError:

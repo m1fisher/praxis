@@ -69,3 +69,44 @@ def build_user_prompt(topic: str, difficulty: str) -> str:
         f"Create a {difficulty} coding problem about: {topic}\n\n"
         "Return only the JSON object described in the system prompt."
     )
+
+
+def build_repair_prompt(problem: dict, mismatches: list[dict]) -> str:
+    """Ask the model to fix a problem that failed its own self-check.
+
+    `mismatches` are the failing cases from running the model's own
+    reference_solution against its tests: each has input, expected (the test's
+    claim), got (what the reference actually returned), and error (if it threw).
+    """
+    import json
+
+    problem_json = json.dumps(problem, indent=2, ensure_ascii=False)
+
+    rows = []
+    for m in mismatches:
+        inp = json.dumps(m.get("input"), ensure_ascii=False)
+        if m.get("error"):
+            rows.append(f"- input={inp}: reference_solution raised: {m['error']}")
+        else:
+            exp = json.dumps(m.get("expected"), ensure_ascii=False)
+            got = json.dumps(m.get("got"), ensure_ascii=False)
+            rows.append(
+                f'- input={inp}: the test says "expected" is {exp}, but running '
+                f"reference_solution on this input actually returns {got}"
+            )
+    mismatch_block = "\n".join(rows)
+
+    return (
+        "You previously generated this coding problem:\n\n"
+        f"{problem_json}\n\n"
+        "It failed an automatic self-check: its own reference_solution disagrees "
+        'with its test "expected" values on these cases:\n'
+        f"{mismatch_block}\n\n"
+        "REPAIR this problem so that reference_solution(*input) == expected for "
+        "EVERY test. Determine which side is correct and fix the other: correct "
+        'the wrong "expected" values, or fix the bug in reference_solution, or (if '
+        "the statement itself is ambiguous) tighten the statement to match. Make "
+        "the minimal change that resolves the inconsistency — keep the same "
+        "problem, don't invent a new one. Return the FULL corrected JSON object "
+        "with all fields, in the exact same schema."
+    )

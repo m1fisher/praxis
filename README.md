@@ -36,8 +36,9 @@ LLMs sometimes miscompute an expected output, which would silently fail a
 **reference solution**. Before a problem is shown, Praxis runs that reference
 against every test case (in the same in-browser Pyodide sandbox). If any
 `expected` value disagrees with what the reference actually produces, the
-problem failed its own self-check and is regenerated (up to a few attempts).
-The reference solution is used only for this check — it's never displayed.
+mismatch is handed back to the model — along with the problem so far — and it's
+asked to **repair** (not regenerate) the problem, up to a few attempts. The
+reference solution is used only for this check — it's never displayed.
 
 ---
 

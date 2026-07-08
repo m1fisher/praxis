@@ -19,10 +19,14 @@
         <option>Hard</option>
       </select>
       <button id="generate" class="btn primary">Generate</button>
+      <span id="model-indicator" class="model-chip topbar-chip" title="Model used for generation"></span>
     </div>
 
     <button id="open-settings" class="btn ghost" title="API key settings">⚙ Key</button>
   </header>
+
+  <!-- Indeterminate progress bar, shown only during generation -->
+  <div id="progress" class="progressbar hidden"><div class="progress-inner"></div></div>
 
   <main class="split">
     <!-- Left: problem statement -->

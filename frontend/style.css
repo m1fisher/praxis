@@ -136,3 +136,37 @@ input:focus, select:focus { border-color: var(--accent); }
 /* ---- Spinner ---- */
 .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; margin-right: 6px; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---- Progress bar (indeterminate) ---- */
+.progressbar { flex: 0 0 auto; height: 3px; background: var(--panel-2); overflow: hidden; }
+.progressbar.hidden { display: none; }
+.progress-inner { height: 100%; width: 35%; background: var(--accent); border-radius: 2px; animation: indeterminate 1.15s ease-in-out infinite; }
+@keyframes indeterminate { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
+
+/* ---- Progress bar stage tint ---- */
+.progressbar.stage-checking .progress-inner { background: var(--green); }
+
+/* ---- Generating state (in the problem panel) ---- */
+.gen-state { max-width: 460px; margin: 12vh auto 0; text-align: center; }
+.gen-spinner { width: 34px; height: 34px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; margin: 0 auto 18px; animation: spin .8s linear infinite; }
+.gen-phase { font-size: 15px; margin-bottom: 14px; }
+.gen-attempt { font-size: 12px; color: var(--amber); margin-bottom: 12px; }
+
+/* ---- Stage stepper ---- */
+.stepper { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 14px; }
+.step { display: inline-flex; align-items: center; font-size: 13px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); background: var(--panel-2); }
+.step.active { color: #fff; background: var(--accent); border-color: var(--accent); }
+.step.done { color: var(--green); border-color: rgba(63,185,80,.4); }
+.step.pending { opacity: .45; border-style: dashed; }
+.step-sep { color: var(--muted); }
+
+/* per-step status marker */
+.sdot { display: inline-block; width: 12px; text-align: center; margin-right: 6px; }
+.sdot.done { color: var(--green); }
+.sdot.pending { color: var(--muted); }
+.sdot.spin { width: 11px; height: 11px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
+
+/* ---- Model chip ---- */
+.model-chip { color: var(--muted); font-size: 13px; }
+.model-chip code { font-family: var(--mono); background: var(--panel-2); border: 1px solid var(--border); padding: 2px 8px; border-radius: 999px; color: var(--text); }
+.topbar-chip { white-space: nowrap; align-self: center; }
