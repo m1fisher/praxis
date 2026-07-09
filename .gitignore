@@ -26,5 +26,9 @@ env/
 .coverage
 htmlcov/
 
+# Node / JS tests
+node_modules/
+npm-debug.log*
+
 # Logs
 *.log

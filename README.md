@@ -89,11 +89,25 @@ praxis/
 ├── frontend/
 │   ├── index.html
 │   ├── style.css
-│   └── app.js            # editor, generate, Pyodide test runner
-└── tests/                # pytest suite (prompts, parsing, API, grading harness)
+│   ├── lib.js            # pure, DOM-free helpers + saved-library logic (unit-tested)
+│   └── app.js            # editor, generate, Pyodide runner, saved-library glue
+├── tests/                # pytest suite (prompts, parsing, API, grading harness)
+├── tests-js/             # vitest suite (frontend/lib.js)
+└── package.json          # JS dev deps (vitest, jsdom)
 ```
 
 ## Tests
+
+Run everything (builds both environments on demand):
+
+```bash
+make test        # backend + frontend
+# also: make install | make test-py | make test-js | make run | make help
+```
+
+Or run each suite directly:
+
+**Backend (pytest):**
 
 ```bash
 uv run pytest
@@ -102,7 +116,18 @@ uv run pytest
 Covers prompt construction, LLM response parsing/validation, provider
 dispatch and error→HTTP-status mapping (SDKs mocked — no network, no keys), the
 FastAPI endpoints, and a contract test mirroring the in-browser grading harness.
-Frontend/DOM behavior isn't covered yet (would need a JS test runner).
+
+**Frontend (vitest + jsdom):**
+
+```bash
+npm install   # first time
+npm test
+```
+
+Covers the pure, DOM-free logic in `frontend/lib.js` — HTML escaping, identifier
+validation, and the saved-library primitives (build/validate entries,
+load/save/remove, and import merging with id-collision handling). DOM/rendering
+glue in `app.js` isn't unit-tested.
 
 ## Roadmap ideas
 
