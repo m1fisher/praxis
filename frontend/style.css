@@ -141,6 +141,7 @@ input:focus, select:focus { border-color: var(--accent); }
 .saved-actions { display: flex; gap: 6px; flex: 0 0 auto; }
 .modal-card label { display: block; margin: 14px 0 6px; font-size: 13px; font-weight: 600; }
 .modal-card input, .modal-card select { width: 100%; }
+.model-custom { margin-top: 8px; }
 .modal-actions { display: flex; gap: 8px; margin-top: 20px; align-items: center; }
 .reference-code { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; overflow: auto; max-height: 55vh; margin: 4px 0 0; }
 .reference-code code { font-family: var(--mono); font-size: 13px; white-space: pre; background: none; padding: 0; }

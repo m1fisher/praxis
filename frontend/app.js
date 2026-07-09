@@ -38,7 +38,7 @@ if (!window.PraxisLib) {
   });
   throw new Error("praxis: window.PraxisLib missing — lib.js failed to load.");
 }
-const { esc, safeIdent, fmt, makeEntry, isValidEntry, importLibrary, loadLibrary, saveLibrary, removeSaved } =
+const { esc, safeIdent, fmt, makeEntry, isValidEntry, importLibrary, loadLibrary, saveLibrary, removeSaved, MODEL_OPTIONS } =
   window.PraxisLib;
 
 // ---------- toast ----------
@@ -58,24 +58,53 @@ function toast(msg) {
 }
 
 // ---------- settings modal ----------
+// Build the model dropdown for a provider: "Default", curated models, "Custom…".
+function populateModelOptions(provider, selected) {
+  const sel = $("model-select");
+  const def = DEFAULT_MODELS[provider] || "provider default";
+  const curated = (MODEL_OPTIONS && MODEL_OPTIONS[provider]) || [];
+
+  let html = `<option value="">Default — ${esc(def)}</option>`;
+  for (const m of curated) html += `<option value="${esc(m)}">${esc(m)}</option>`;
+  html += `<option value="__custom__">Custom…</option>`;
+  sel.innerHTML = html;
+
+  if (selected && !curated.includes(selected)) {
+    // A stored model that isn't in the list => treat it as custom.
+    sel.value = "__custom__";
+    $("model").value = selected;
+    $("model").hidden = false;
+  } else {
+    sel.value = selected || "";
+    $("model").hidden = true;
+  }
+}
+
+function onModelSelectChange() {
+  const custom = $("model-select").value === "__custom__";
+  $("model").hidden = !custom;
+  if (custom) $("model").focus();
+}
+
 function openSettings() {
   $("provider").value = LS.provider;
+  populateModelOptions(LS.provider, LS.model);
   $("api-key").value = LS.key;
-  $("model").value = LS.model;
   $("settings").classList.remove("hidden");
 }
 function closeSettings() { $("settings").classList.add("hidden"); }
 function saveSettings() {
   LS.provider = $("provider").value;
   LS.key = $("api-key").value.trim();
-  LS.model = $("model").value.trim();
+  const sel = $("model-select").value;
+  LS.model = sel === "__custom__" ? $("model").value.trim() : sel;
   updateModelIndicator();
   closeSettings();
 }
 function clearKey() {
   LS.clear();
   $("api-key").value = "";
-  $("model").value = "";
+  populateModelOptions($("provider").value, "");
   toast("Key cleared from this browser.");
 }
 
@@ -679,6 +708,9 @@ function boot() {
   $("save-settings").addEventListener("click", saveSettings);
   $("clear-key").addEventListener("click", clearKey);
   $("settings").addEventListener("click", (e) => { if (e.target.id === "settings") closeSettings(); });
+  // Switching provider resets the model list; picking "Custom…" reveals the input.
+  $("provider").addEventListener("change", () => populateModelOptions($("provider").value, ""));
+  $("model-select").addEventListener("change", onModelSelectChange);
 
   // saved library
   $("save-problem").addEventListener("click", saveCurrent);

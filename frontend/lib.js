@@ -13,6 +13,14 @@
 (function () {
   const SAVED_KEY = "praxis.saved";
 
+  // Curated model choices per provider for the settings dropdown. These can go
+  // stale as providers ship/retire models — the UI always also offers "Default"
+  // and a "Custom…" free-text option, so this list is convenience, not a limit.
+  const MODEL_OPTIONS = {
+    anthropic: ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"],
+    openai: ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano"],
+  };
+
   function esc(s) {
     return String(s).replace(/[&<>"]/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -79,7 +87,7 @@
   }
 
   const PraxisLib = {
-    SAVED_KEY, esc, safeIdent, fmt, newId,
+    SAVED_KEY, MODEL_OPTIONS, esc, safeIdent, fmt, newId,
     loadLibrary, saveLibrary, removeSaved, makeEntry, isValidEntry, importLibrary,
   };
 

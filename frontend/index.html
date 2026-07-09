@@ -80,8 +80,9 @@
       <label>API key</label>
       <input id="api-key" type="password" placeholder="sk-ant-… or sk-…" autocomplete="off" />
 
-      <label>Model <span class="muted">(optional — blank uses a sensible default)</span></label>
-      <input id="model" type="text" placeholder="e.g. claude-sonnet-4-6 / gpt-4o" autocomplete="off" />
+      <label>Model</label>
+      <select id="model-select"></select>
+      <input id="model" type="text" placeholder="Enter a model id" autocomplete="off" class="model-custom" hidden />
 
       <div class="modal-actions">
         <button id="clear-key" class="btn ghost">Clear</button>

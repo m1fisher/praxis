@@ -5,6 +5,15 @@ const lib = globalThis.PraxisLib;
 
 beforeEach(() => localStorage.clear());
 
+describe("MODEL_OPTIONS", () => {
+  it("lists models for both providers including the defaults", () => {
+    expect(Array.isArray(lib.MODEL_OPTIONS.anthropic)).toBe(true);
+    expect(Array.isArray(lib.MODEL_OPTIONS.openai)).toBe(true);
+    expect(lib.MODEL_OPTIONS.anthropic).toContain("claude-sonnet-4-6");
+    expect(lib.MODEL_OPTIONS.openai).toContain("gpt-5.4-mini");
+  });
+});
+
 describe("esc", () => {
   it("escapes HTML-significant characters", () => {
     expect(lib.esc('<a href="x">&')).toBe("&lt;a href=&quot;x&quot;&gt;&amp;");
