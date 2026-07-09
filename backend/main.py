@@ -7,10 +7,13 @@ for a single call. Nothing about the key is persisted or logged.
 
 from __future__ import annotations
 
+import base64
+import os
+import secrets
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -18,7 +21,35 @@ from .llm import generate_problem, LLMError
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
+# Optional shared-password gate for public deploys. Set BOTH env vars to enable;
+# leave unset (the default) for frictionless local dev.
+_AUTH_USER = os.environ.get("PRAXIS_AUTH_USER")
+_AUTH_PASS = os.environ.get("PRAXIS_AUTH_PASSWORD")
+
 app = FastAPI(title="Praxis", description="LLM-generated LeetCode-style practice.")
+
+
+def _check_basic_auth(header: str) -> bool:
+    if not header.startswith("Basic "):
+        return False
+    try:
+        user, _, pw = base64.b64decode(header[6:]).decode("utf-8").partition(":")
+    except Exception:
+        return False
+    return (
+        secrets.compare_digest(user, _AUTH_USER)
+        and secrets.compare_digest(pw, _AUTH_PASS)
+    )
+
+
+@app.middleware("http")
+async def basic_auth(request, call_next):
+    """Gate the whole site behind a shared password when configured. `/api/health`
+    stays open so platform health checks work. No-op when the env vars are unset."""
+    if _AUTH_USER and _AUTH_PASS and request.url.path != "/api/health":
+        if not _check_basic_auth(request.headers.get("Authorization", "")):
+            return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="praxis"'})
+    return await call_next(request)
 
 
 @app.middleware("http")

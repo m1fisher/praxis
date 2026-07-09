@@ -22,6 +22,10 @@ install: .venv node_modules
 run: .venv
 	uv run uvicorn backend.main:app --reload
 
+## share: expose the app publicly via Cloudflare Tunnel (set PRAXIS_AUTH_USER/PASSWORD)
+share: .venv
+	./scripts/share.sh
+
 ## clean: remove environments and caches
 clean:
 	rm -rf .venv node_modules .pytest_cache

@@ -1,5 +1,7 @@
 """Tests for the FastAPI surface (backend/main.py)."""
 
+import base64
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -9,6 +11,39 @@ from backend.llm import LLMError
 client = TestClient(main.app)
 
 AUTH = {"X-Provider": "anthropic", "X-Api-Key": "sk-test"}
+
+
+def _basic(user, pw):
+    token = base64.b64encode(f"{user}:{pw}".encode()).decode()
+    return {"Authorization": f"Basic {token}"}
+
+
+class TestBasicAuthGate:
+    def test_disabled_by_default(self):
+        # No PRAXIS_AUTH_* env set => site is open (all other tests rely on this).
+        assert client.get("/").status_code == 200
+
+    def test_enabled_blocks_without_credentials(self, monkeypatch):
+        monkeypatch.setattr(main, "_AUTH_USER", "friend")
+        monkeypatch.setattr(main, "_AUTH_PASS", "s3cret")
+        r = client.get("/")
+        assert r.status_code == 401
+        assert r.headers.get("WWW-Authenticate", "").startswith("Basic")
+
+    def test_correct_credentials_pass(self, monkeypatch):
+        monkeypatch.setattr(main, "_AUTH_USER", "friend")
+        monkeypatch.setattr(main, "_AUTH_PASS", "s3cret")
+        assert client.get("/", headers=_basic("friend", "s3cret")).status_code == 200
+
+    def test_wrong_credentials_rejected(self, monkeypatch):
+        monkeypatch.setattr(main, "_AUTH_USER", "friend")
+        monkeypatch.setattr(main, "_AUTH_PASS", "s3cret")
+        assert client.get("/", headers=_basic("friend", "nope")).status_code == 401
+
+    def test_health_stays_open_for_probes(self, monkeypatch):
+        monkeypatch.setattr(main, "_AUTH_USER", "friend")
+        monkeypatch.setattr(main, "_AUTH_PASS", "s3cret")
+        assert client.get("/api/health").status_code == 200
 
 
 class TestStaticAndHealth:

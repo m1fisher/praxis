@@ -77,6 +77,30 @@ and hit **Generate**.
 
 > First **Run** downloads the Pyodide runtime (~a few MB) once, then caches it.
 
+## Sharing it with someone (temporary)
+
+Expose your locally-running app over a public HTTPS URL via an ephemeral
+[Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/),
+gated by a shared password:
+
+```bash
+brew install cloudflared      # one-time
+PRAXIS_AUTH_USER=friend PRAXIS_AUTH_PASSWORD='pick-a-password' make share
+```
+
+It prints a `https://<random>.trycloudflare.com` URL — share that plus the
+login. Notes:
+
+- Your Mac must stay on and awake while they use it (the tunnel points at your
+  machine); Ctrl+C stops both the app and the tunnel.
+- The URL is random and changes each run. It's meant for a quick session, not a
+  standing link — for always-on, deploy to a host and set the same
+  `PRAXIS_AUTH_USER` / `PRAXIS_AUTH_PASSWORD` env vars there.
+- Everything is BYOK: your friend needs their own Anthropic/OpenAI key.
+
+The password gate (`PRAXIS_AUTH_USER` + `PRAXIS_AUTH_PASSWORD`) is off unless
+both env vars are set, so local dev is unaffected.
+
 ## Project layout
 
 ```
