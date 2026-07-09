@@ -1,0 +1,13 @@
+{
+  "name": "praxis",
+  "private": true,
+  "type": "module",
+  "description": "Frontend unit tests for praxis (Python backend is managed with uv).",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "jsdom": "^25",
+    "vitest": "^2"
+  }
+}
