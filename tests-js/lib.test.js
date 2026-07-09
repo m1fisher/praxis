@@ -45,6 +45,36 @@ describe("fmt", () => {
   });
 });
 
+describe("fmtMs", () => {
+  it("formats by magnitude", () => {
+    expect(lib.fmtMs(123.4)).toBe("123 ms");
+    expect(lib.fmtMs(3.45)).toBe("3.5 ms");
+    expect(lib.fmtMs(0.42)).toBe("0.42 ms");
+    expect(lib.fmtMs(Infinity)).toBe("—");
+  });
+});
+
+describe("runtimeVerdict", () => {
+  it("flags a faster solution", () => {
+    const v = lib.runtimeVerdict(0.001, 0.002); // user 2x faster
+    expect(v.cls).toBe("fast");
+    expect(v.label).toMatch(/2\.0× faster/);
+  });
+  it("flags a slower solution", () => {
+    const v = lib.runtimeVerdict(0.003, 0.001); // user 3x slower
+    expect(v.cls).toBe("slow");
+    expect(v.label).toMatch(/3\.0× slower/);
+  });
+  it("calls near-equal times 'about the same'", () => {
+    expect(lib.runtimeVerdict(0.00101, 0.001).cls).toBe("same");
+  });
+  it("returns null when a measurement is missing or non-positive", () => {
+    expect(lib.runtimeVerdict(null, 0.001)).toBeNull();
+    expect(lib.runtimeVerdict(0, 0.001)).toBeNull();
+    expect(lib.runtimeVerdict(0.001, 0)).toBeNull();
+  });
+});
+
 describe("makeEntry", () => {
   it("captures the problem, code, and metadata", () => {
     const p = {

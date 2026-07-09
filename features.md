@@ -1,3 +1,3 @@
-* larger set of hidden test sets
+* Separate hidden vs. visible test cases 
 * dialog box to discuss question clarifications with LLM.
-* compare runtime against ref solution runtime
+* add a few starter hints?

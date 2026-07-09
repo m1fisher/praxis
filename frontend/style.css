@@ -124,6 +124,11 @@ input:focus, select:focus { border-color: var(--accent); }
 .stdout { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; white-space: pre-wrap; }
 .case-stdout { margin-top: 6px; padding: 6px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--muted); }
 
+.runtime { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); font-family: var(--mono); font-size: 13px; }
+.runtime b { color: var(--text); }
+.runtime .fast { color: var(--green); font-weight: 700; }
+.runtime .slow { color: var(--red); font-weight: 700; }
+
 /* ---- Modal ---- */
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 100; }
 .modal.hidden { display: none; }

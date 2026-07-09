@@ -38,7 +38,7 @@ if (!window.PraxisLib) {
   });
   throw new Error("praxis: window.PraxisLib missing — lib.js failed to load.");
 }
-const { esc, safeIdent, fmt, makeEntry, isValidEntry, importLibrary, loadLibrary, saveLibrary, removeSaved, MODEL_OPTIONS } =
+const { esc, safeIdent, fmt, fmtMs, runtimeVerdict, makeEntry, isValidEntry, importLibrary, loadLibrary, saveLibrary, removeSaved, MODEL_OPTIONS } =
   window.PraxisLib;
 
 // ---------- toast ----------
@@ -610,6 +610,82 @@ async function deriveTests(code, fn, inputs) {
   }
 }
 
+// Time a solution by running fn on all inputs repeatedly. Auto-scales the number
+// of passes so the total exceeds the browser clock's resolution, then returns
+// the seconds spent per single pass over all inputs (or null if not callable).
+function buildTimingHarness(fn, inputs) {
+  const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(inputs || []))));
+  return `
+import json as _json, base64 as _b64, time as _time
+_inputs = _json.loads(_b64.b64decode("${b64}").decode("utf-8"))
+_fn = globals().get(${JSON.stringify(fn)})
+def _one_pass():
+    for _inp in _inputs:
+        _args = _inp if isinstance(_inp, (list, tuple)) else [_inp]
+        try:
+            _fn(*_args)
+        except Exception:
+            pass
+_result = None
+if callable(_fn) and _inputs:
+    _one_pass()  # warm up
+    _passes = 1
+    while True:
+        _t0 = _time.perf_counter()
+        for _ in range(_passes):
+            _one_pass()
+        _dt = _time.perf_counter() - _t0
+        if _dt >= 0.03 or _passes >= 100000:
+            break
+        _passes *= 4
+    _result = _dt / _passes
+_json.dumps({"seconds": _result})
+`;
+}
+
+async function timeSolution(code, fn, inputs) {
+  const py = await ensurePyodide();
+  py.setStdout({ batched: () => {} }); // don't let prints skew timing
+  const ns = py.toPy({});
+  try {
+    const json = await py.runPythonAsync(code + "\n" + buildTimingHarness(fn, inputs), { globals: ns });
+    return JSON.parse(json).seconds; // seconds per pass, or null
+  } finally {
+    ns.destroy();
+  }
+}
+
+function renderRuntime(userSec, refSec) {
+  const v = runtimeVerdict(userSec, refSec);
+  if (!v) {
+    return '<div class="runtime"><span class="k">Runtime:</span> <span class="muted">too fast to measure reliably</span></div>';
+  }
+  return `<div class="runtime" title="Rough — measured in-browser over the test inputs">
+    <span class="k">Runtime:</span> yours <b>${fmtMs(v.userMs)}</b> · reference <b>${fmtMs(v.refMs)}</b> · <span class="${v.cls}">${esc(v.label)}</span>
+  </div>`;
+}
+
+// After an Accepted run, time the user's solution and the reference over the
+// same inputs and append the comparison to the results panel.
+async function appendRuntimeComparison(userCode, fn) {
+  const inputs = (currentProblem.tests || []).map((t) => t.input);
+  if (!inputs.length) return;
+
+  const note = document.createElement("div");
+  note.className = "runtime muted";
+  note.innerHTML = '<span class="spinner"></span> Comparing runtime vs reference…';
+  $("results-body").appendChild(note);
+
+  try {
+    const userSec = await timeSolution(userCode, fn, inputs);
+    const refSec = await timeSolution(currentProblem.reference_solution, fn, inputs);
+    note.outerHTML = renderRuntime(userSec, refSec);
+  } catch (e) {
+    console.error("Runtime comparison failed:", e);
+    note.remove();
+  }
+}
+
 async function runCode() {
   if (!currentProblem) return;
   const fn = safeIdent(currentProblem.function_name);
@@ -617,11 +693,18 @@ async function runCode() {
 
   const runBtn = $("run");
   runBtn.disabled = true;
+  const userCode = editor.getValue();
   try {
     await ensurePyodide();
     setResults('<span class="spinner"></span> Running tests…');
-    const { cases, stdout } = await evaluate(editor.getValue(), fn, currentProblem.tests, true);
+    const { cases, stdout } = await evaluate(userCode, fn, currentProblem.tests, true);
     renderResults(cases, stdout);
+
+    // Only compare runtime for a correct solution that has a reference.
+    const allPass = cases.length && cases.every((c) => c.ok);
+    if (allPass && currentProblem.reference_solution) {
+      await appendRuntimeComparison(userCode, fn);
+    }
   } catch (e) {
     // Syntax errors / exceptions raised while defining the function land here.
     setResults(`<div class="summary fail">Error</div><div class="case fail"><div class="row">${esc(e.message || e)}</div></div>`);

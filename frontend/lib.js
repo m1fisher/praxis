@@ -34,6 +34,27 @@
     try { return JSON.stringify(v); } catch { return String(v); }
   }
 
+  function fmtMs(ms) {
+    if (!isFinite(ms)) return "—";
+    if (ms >= 10) return `${ms.toFixed(0)} ms`;
+    if (ms >= 1) return `${ms.toFixed(1)} ms`;
+    return `${ms.toFixed(2)} ms`;
+  }
+
+  // Compare seconds-per-pass of the user's vs the reference solution. Returns
+  // null when either measurement is missing or non-positive (too fast to trust).
+  function runtimeVerdict(userSec, refSec) {
+    if (userSec == null || refSec == null || userSec <= 0 || refSec <= 0) return null;
+    const userMs = userSec * 1000;
+    const refMs = refSec * 1000;
+    const ratio = userSec / refSec;
+    let label, cls;
+    if (ratio < 0.9) { label = `~${(1 / ratio).toFixed(1)}× faster than reference`; cls = "fast"; }
+    else if (ratio <= 1.1) { label = "about the same as reference"; cls = "same"; }
+    else { label = `~${ratio.toFixed(1)}× slower than reference`; cls = "slow"; }
+    return { userMs, refMs, ratio, label, cls };
+  }
+
   function newId() { return `p_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`; }
 
   function loadLibrary() {
@@ -87,7 +108,7 @@
   }
 
   const PraxisLib = {
-    SAVED_KEY, MODEL_OPTIONS, esc, safeIdent, fmt, newId,
+    SAVED_KEY, MODEL_OPTIONS, esc, safeIdent, fmt, fmtMs, runtimeVerdict, newId,
     loadLibrary, saveLibrary, removeSaved, makeEntry, isValidEntry, importLibrary,
   };
 
