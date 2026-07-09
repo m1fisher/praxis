@@ -327,8 +327,44 @@ function applyProblem(problem, code) {
   $("run").disabled = false;
   $("reset-code").disabled = false;
   $("save-problem").disabled = false;
+  resetSolutionButton();
+  $("show-solution").disabled = !problem.reference_solution;
   $("fn-label").textContent = problem.function_name ? `def ${problem.function_name}(…)` : "";
 }
+
+// ---------- reference solution (two-click reveal) ----------
+let solutionArmed = false;
+let solutionTimer = null;
+
+function resetSolutionButton() {
+  solutionArmed = false;
+  clearTimeout(solutionTimer);
+  const b = $("show-solution");
+  b.textContent = "Solution";
+  b.classList.remove("danger");
+}
+
+function onShowSolution() {
+  if (!currentProblem || !currentProblem.reference_solution) {
+    toast("No reference solution for this problem.");
+    return;
+  }
+  const b = $("show-solution");
+  if (!solutionArmed) {
+    // First click: arm, and auto-disarm after a few seconds.
+    solutionArmed = true;
+    b.textContent = "Reveal answer?";
+    b.classList.add("danger");
+    solutionTimer = setTimeout(resetSolutionButton, 3000);
+    return;
+  }
+  // Second click: reveal. textContent avoids any HTML injection.
+  resetSolutionButton();
+  $("reference-code").textContent = currentProblem.reference_solution;
+  $("reference-modal").classList.remove("hidden");
+}
+
+function closeReference() { $("reference-modal").classList.add("hidden"); }
 
 // ---------- saved library (localStorage) ----------
 // The pure primitives (loadLibrary/saveLibrary/makeEntry/isValidEntry/
@@ -564,6 +600,9 @@ function boot() {
   $("reset-code").addEventListener("click", () => {
     if (currentProblem && editor) editor.setValue(currentProblem.starter_code || "");
   });
+  $("show-solution").addEventListener("click", onShowSolution);
+  $("close-reference").addEventListener("click", closeReference);
+  $("reference-modal").addEventListener("click", (e) => { if (e.target.id === "reference-modal") closeReference(); });
 
   $("open-settings").addEventListener("click", openSettings);
   $("close-settings").addEventListener("click", closeSettings);

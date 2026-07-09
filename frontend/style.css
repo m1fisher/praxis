@@ -67,6 +67,8 @@ input:focus, select:focus { border-color: var(--accent); }
 .btn.run { background: var(--green); border-color: var(--green); color: #04140a; font-weight: 700; }
 .btn.run:hover { filter: brightness(1.08); }
 .btn.ghost { background: transparent; }
+.btn.danger { background: var(--red); border-color: var(--red); color: #fff; font-weight: 600; }
+.btn.danger:hover { filter: brightness(1.08); }
 
 /* ---- Split layout ---- */
 .split { display: flex; flex: 1; min-height: 0; }
@@ -140,6 +142,8 @@ input:focus, select:focus { border-color: var(--accent); }
 .modal-card label { display: block; margin: 14px 0 6px; font-size: 13px; font-weight: 600; }
 .modal-card input, .modal-card select { width: 100%; }
 .modal-actions { display: flex; gap: 8px; margin-top: 20px; align-items: center; }
+.reference-code { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; overflow: auto; max-height: 55vh; margin: 4px 0 0; }
+.reference-code code { font-family: var(--mono); font-size: 13px; white-space: pre; background: none; padding: 0; }
 
 /* ---- Toast ---- */
 .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--border); border-left: 3px solid var(--red); color: var(--text); padding: 12px 16px; border-radius: 8px; z-index: 200; max-width: 80vw; box-shadow: 0 8px 24px rgba(0,0,0,.4); }

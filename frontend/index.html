@@ -51,6 +51,7 @@
       <div class="editor-toolbar">
         <span id="fn-label" class="fn-label"></span>
         <div class="spacer"></div>
+        <button id="show-solution" class="btn ghost" disabled title="Reveal the reference solution">Solution</button>
         <button id="save-problem" class="btn ghost" disabled title="Save this problem to your library">★ Save</button>
         <button id="reset-code" class="btn ghost" disabled>Reset</button>
         <button id="run" class="btn run" disabled>▶ Run</button>
@@ -87,6 +88,19 @@
         <div class="spacer"></div>
         <button id="close-settings" class="btn">Cancel</button>
         <button id="save-settings" class="btn primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reference solution modal -->
+  <div id="reference-modal" class="modal hidden">
+    <div class="modal-card modal-wide">
+      <h2>Reference solution</h2>
+      <p class="muted">One correct implementation — ideally, only peek after a real attempt.</p>
+      <pre class="reference-code"><code id="reference-code"></code></pre>
+      <div class="modal-actions">
+        <div class="spacer"></div>
+        <button id="close-reference" class="btn">Close</button>
       </div>
     </div>
   </div>
