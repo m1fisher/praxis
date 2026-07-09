@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Praxis — practice problems, on demand</title>
+  <link rel="icon" href="data:," /> <!-- suppress the default favicon.ico 404 -->
   <link rel="stylesheet" href="/style.css" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
 </head>
@@ -106,15 +107,18 @@
     </div>
   </div>
 
-  <!-- Third-party libs -->
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+  <!-- App scripts FIRST: they wire the UI and must run even if a CDN is blocked
+       or slow. Pyodide is loaded lazily on first Run (see app.js). -->
   <script>
-    // Pyodide is loaded lazily on first Run (see app.js).
     window.PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/";
     window.MONACO_VS = "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs";
   </script>
   <script src="/lib.js"></script>
   <script src="/app.js"></script>
+
+  <!-- Third-party libs load AFTER; the app degrades gracefully without them
+       (Monaco -> plain textarea, marked -> plain text). -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
 </body>
 </html>

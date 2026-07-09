@@ -27,7 +27,17 @@ const DEFAULT_MODELS = { anthropic: "claude-sonnet-4-6", openai: "gpt-5.4-mini" 
 function resolvedModel() { return LS.model || DEFAULT_MODELS[LS.provider] || LS.provider; }
 
 // Pure helpers + saved-library primitives — defined in lib.js so they can be
-// unit-tested in isolation (see tests-js/lib.test.js).
+// unit-tested in isolation (see tests-js/lib.test.js). If lib.js didn't load
+// (stale cache, network blip), fail loudly instead of silently killing the app.
+if (!window.PraxisLib) {
+  document.addEventListener("DOMContentLoaded", () => {
+    document.body.innerHTML =
+      '<div style="max-width:520px;margin:15vh auto;text-align:center;font-family:sans-serif;color:#e6edf3">' +
+      "<h2>Couldn't load the app</h2><p>A script (<code>lib.js</code>) failed to load — " +
+      "usually a stale cache. Please hard-refresh: <b>Cmd/Ctrl + Shift + R</b>.</p></div>";
+  });
+  throw new Error("praxis: window.PraxisLib missing — lib.js failed to load.");
+}
 const { esc, safeIdent, fmt, makeEntry, isValidEntry, importLibrary, loadLibrary, saveLibrary, removeSaved } =
   window.PraxisLib;
 
@@ -69,21 +79,54 @@ function clearKey() {
   toast("Key cleared from this browser.");
 }
 
-// ---------- Monaco ----------
-function initEditor() {
+// ---------- Monaco (with graceful fallback) ----------
+function initEditor(attempt = 0) {
+  // Monaco's AMD loader (`require`) comes from a CDN script loaded after us.
+  // Poll briefly for it; if it never shows (CDN blocked/slow), fall back to a
+  // plain textarea so the user can still write and run code.
+  if (typeof require === "undefined" || typeof require.config !== "function") {
+    if (attempt >= 50) { // ~5s
+      console.error("Monaco loader unavailable — using plain-textarea editor.");
+      useTextareaEditor();
+      return;
+    }
+    setTimeout(() => initEditor(attempt + 1), 100);
+    return;
+  }
   require.config({ paths: { vs: window.MONACO_VS } });
-  require(["vs/editor/editor.main"], () => {
-    editor = monaco.editor.create($("editor"), {
-      value: "# Generate a problem, then write your solution here.\n",
-      language: "python",
-      theme: "vs-dark",
-      fontSize: 14,
-      minimap: { enabled: false },
-      automaticLayout: true,
-      scrollBeyondLastLine: false,
-      tabSize: 4,
-    });
-  });
+  require(
+    ["vs/editor/editor.main"],
+    () => {
+      editor = monaco.editor.create($("editor"), {
+        value: "# Generate a problem, then write your solution here.\n",
+        language: "python",
+        theme: "vs-dark",
+        fontSize: 14,
+        minimap: { enabled: false },
+        automaticLayout: true,
+        scrollBeyondLastLine: false,
+        tabSize: 4,
+      });
+    },
+    () => { // AMD errback: loader present but module failed to fetch
+      console.error("Monaco failed to load — using plain-textarea editor.");
+      useTextareaEditor();
+    },
+  );
+}
+
+// Minimal editor shim (getValue/setValue) used when Monaco can't load, so the
+// rest of the app keeps working.
+function useTextareaEditor() {
+  if (editor && editor.__isFallback) return;
+  $("editor").innerHTML =
+    '<textarea id="fallback-editor" spellcheck="false" placeholder="# Write your solution here"></textarea>';
+  const ta = $("fallback-editor");
+  editor = {
+    __isFallback: true,
+    getValue: () => ta.value,
+    setValue: (v) => { ta.value = v == null ? "" : v; },
+  };
 }
 
 // ---------- progress + model indicator ----------
@@ -246,6 +289,11 @@ async function generate() {
 }
 
 // ---------- render problem ----------
+function renderMarkdown(md) {
+  if (typeof marked !== "undefined" && marked.parse) return marked.parse(md);
+  return `<pre style="white-space:pre-wrap;font-family:inherit">${esc(md)}</pre>`; // fallback
+}
+
 function renderProblem(p) {
   const diff = ["Easy", "Medium", "Hard"].includes(p.difficulty) ? p.difficulty : "Medium";
   const examples = (p.examples || []).map((ex) => `
@@ -262,7 +310,7 @@ function renderProblem(p) {
       <span class="badge ${diff}">${diff}</span>
       ${p.model ? `<span class="model-chip">via <code>${esc(p.model)}</code></span>` : ""}
     </div>
-    <div style="margin:16px 0">${marked.parse(p.description || "")}</div>
+    <div style="margin:16px 0">${renderMarkdown(p.description || "")}</div>
     ${examples ? `<h2>Examples</h2>${examples}` : ""}
     ${constraints ? `<h2>Constraints</h2><ul>${constraints}</ul>` : ""}
   `;
@@ -507,10 +555,9 @@ function initDivider() {
 }
 
 // ---------- wire up ----------
-window.addEventListener("DOMContentLoaded", () => {
-  initEditor();
-  initDivider();
-
+function boot() {
+  // Wire the UI FIRST — so a failure loading the editor or Python runtime (e.g.
+  // a blocked CDN) can never leave the buttons dead.
   $("generate").addEventListener("click", generate);
   $("topic").addEventListener("keydown", (e) => { if (e.key === "Enter") generate(); });
   $("run").addEventListener("click", runCode);
@@ -536,9 +583,25 @@ window.addEventListener("DOMContentLoaded", () => {
 
   updateModelIndicator();
 
-  // Warm up the Python runtime in the background so the first problem's
-  // self-check (and the first Run) don't wait on the download.
-  ensurePyodide().catch(() => {});
+  // Editor + Python runtime are loaded from CDNs and are NOT required for the
+  // rest of the UI — isolate their failures so they can't cascade.
+  try {
+    initEditor();
+  } catch (e) {
+    console.error("Monaco editor failed to load:", e);
+    toast("Code editor failed to load — a CDN may be blocked (ad-blocker / network).");
+  }
+  try { initDivider(); } catch (e) { console.error(e); }
+  ensurePyodide().catch((e) => console.error("Pyodide failed to load:", e));
 
   if (!LS.key) openSettings();
-});
+}
+
+// app.js sits after the page markup (and before the CDN <script> tags), so the
+// elements already exist — boot NOW rather than waiting for DOMContentLoaded,
+// which a slow/blocked CDN script could otherwise delay indefinitely.
+if ($("open-settings")) {
+  boot();
+} else {
+  document.addEventListener("DOMContentLoaded", boot);
+}
