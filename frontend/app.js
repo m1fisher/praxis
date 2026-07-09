@@ -265,10 +265,23 @@ async function generate() {
       };
     }
 
+    // Expand the hidden suite: derive expected outputs by running the (now
+    // trusted) reference solution on the model's extra inputs.
+    if (verified && problem.reference_solution && Array.isArray(problem.extra_inputs) && problem.extra_inputs.length) {
+      const rfn = safeIdent(problem.function_name);
+      try {
+        const derived = await deriveTests(problem.reference_solution, rfn, problem.extra_inputs.slice(0, 50));
+        if (derived.length) problem.tests = [...(problem.tests || []), ...derived];
+      } catch (e) {
+        console.error("Failed to derive extra tests:", e);
+      }
+    }
+
     applyProblem(problem);
 
     if (verified) {
-      setResults('<div class="summary pass">✓ self-checked</div><span class="muted">The reference solution passes all hidden tests. Write yours and hit Run.</span>');
+      const n = (problem.tests || []).length;
+      setResults(`<div class="summary pass">✓ self-checked</div><span class="muted">Reference passes all ${n} hidden test${n === 1 ? "" : "s"}. Write yours and hit Run.</span>`);
     } else if (unverifiable) {
       setResults('<span class="muted">Ready. (Couldn\'t self-verify — no runtime or reference solution.) Write your solution and hit Run.</span>');
     } else {
@@ -531,6 +544,43 @@ async function evaluate(code, fn, tests, capture) {
   }
 }
 
+// Harness that runs `fn` on inputs-only and returns [{input, expected}] where
+// expected is the reference's output. Skips inputs that error or produce a
+// non-JSON-serializable result, so derived tests stay clean.
+function buildDeriveHarness(fn, inputs) {
+  const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(inputs || []))));
+  return `
+import json as _json, base64 as _b64
+_inputs = _json.loads(_b64.b64decode("${b64}").decode("utf-8"))
+_fn = globals().get(${JSON.stringify(fn)})
+_out = []
+if callable(_fn):
+    for _inp in _inputs:
+        _args = _inp if isinstance(_inp, (list, tuple)) else [_inp]
+        try:
+            _got = _fn(*_args)
+            _json.dumps(_got)  # keep only JSON-serializable outputs
+            _out.append({"input": list(_args), "expected": _got})
+        except Exception:
+            pass  # skip invalid inputs / non-serializable outputs
+_json.dumps(_out)
+`;
+}
+
+// Derive extra {input, expected} tests by running the (trusted) reference
+// solution on the model's extra_inputs.
+async function deriveTests(code, fn, inputs) {
+  const py = await ensurePyodide();
+  py.setStdout({ batched: () => {} });
+  const ns = py.toPy({});
+  try {
+    const json = await py.runPythonAsync(code + "\n" + buildDeriveHarness(fn, inputs), { globals: ns });
+    return JSON.parse(json);
+  } finally {
+    ns.destroy();
+  }
+}
+
 async function runCode() {
   if (!currentProblem) return;
   const fn = safeIdent(currentProblem.function_name);
@@ -551,9 +601,21 @@ async function runCode() {
   }
 }
 
+function caseCard(c, i) {
+  const out = (c.stdout || "").replace(/\s+$/, "");
+  return `<div class="case ${c.ok ? "pass" : "fail"}">
+    <div class="row"><span class="k">Test ${i + 1}:</span> ${c.ok ? "✓ passed" : "✗ failed"}</div>
+    ${c.input !== null && c.input !== undefined ? `<div class="row"><span class="k">input:</span> ${esc(fmt(c.input))}</div>` : ""}
+    ${!c.ok && c.error ? `<div class="row"><span class="k">error:</span> ${esc(c.error)}</div>` : ""}
+    ${!c.ok && !c.error ? `<div class="row"><span class="k">expected:</span> ${esc(fmt(c.expected))}</div>
+      <div class="row"><span class="k">got:</span> ${esc(fmt(c.got))}</div>` : ""}
+    ${out ? `<div class="row case-stdout"><span class="k">stdout:</span>\n${esc(out)}</div>` : ""}
+  </div>`;
+}
+
 function renderResults(cases, stdout) {
-  const passed = cases.filter((c) => c.ok).length;
   const total = cases.length;
+  const passed = cases.filter((c) => c.ok).length;
   const allPass = passed === total;
 
   let html = `<div class="summary ${allPass ? "pass" : "fail"}">${allPass ? "✓ Accepted" : "✗ Wrong Answer"} — ${passed}/${total} tests passed</div>`;
@@ -561,17 +623,25 @@ function renderResults(cases, stdout) {
   if (stdout && stdout.trim()) {
     html += `<div class="stdout"><span class="muted">module output</span>\n${esc(stdout.trimEnd())}</div>`;
   }
+
+  if (allPass) {
+    html += `<div class="muted">All ${total} hidden test${total === 1 ? "" : "s"} passed.</div>`;
+    setResults(html);
+    return;
+  }
+
+  // On failure, show the failing cases in detail (capped) so large suites don't
+  // flood the console. Test numbers stay aligned with the full suite.
+  const MAX_SHOWN = 12;
+  let shown = 0;
   cases.forEach((c, i) => {
-    const out = (c.stdout || "").replace(/\s+$/, "");
-    html += `<div class="case ${c.ok ? "pass" : "fail"}">
-      <div class="row"><span class="k">Test ${i + 1}:</span> ${c.ok ? "✓ passed" : "✗ failed"}</div>
-      ${c.input !== null ? `<div class="row"><span class="k">input:</span> ${esc(fmt(c.input))}</div>` : ""}
-      ${!c.ok && c.error ? `<div class="row"><span class="k">error:</span> ${esc(c.error)}</div>` : ""}
-      ${!c.ok && !c.error ? `<div class="row"><span class="k">expected:</span> ${esc(fmt(c.expected))}</div>
-        <div class="row"><span class="k">got:</span> ${esc(fmt(c.got))}</div>` : ""}
-      ${out ? `<div class="row case-stdout"><span class="k">stdout:</span>\n${esc(out)}</div>` : ""}
-    </div>`;
+    if (c.ok || shown >= MAX_SHOWN) return;
+    shown++;
+    html += caseCard(c, i);
   });
+  const moreFails = total - passed - shown;
+  if (moreFails > 0) html += `<div class="muted">…and ${moreFails} more failing test${moreFails === 1 ? "" : "s"}.</div>`;
+  if (passed > 0) html += `<div class="muted" style="margin-top:6px">${passed} test${passed === 1 ? "" : "s"} passed.</div>`;
   setResults(html);
 }
 

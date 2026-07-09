@@ -33,7 +33,11 @@ The JSON object MUST have exactly these fields:
                                  // starter_code.
   "tests": [                     // 4-8 deterministic test cases
     { "input": [ ...positional args... ], "expected": <any JSON value> }
-  ]
+  ],
+  "extra_inputs": [              // 15-30 ADDITIONAL inputs, INPUTS ONLY (no
+    [ ...positional args... ]    // "expected"). Their outputs are computed by
+  ]                              // running reference_solution, so you don't
+                                 // supply expected values here.
 }
 
 Hard requirements for the tests — these run automatically in a sandbox:
@@ -47,6 +51,12 @@ Hard requirements for the tests — these run automatically in a sandbox:
   lists, dicts, tuples-as-lists). Avoid problems whose answer is "any valid
   ordering" unless you fix a canonical order in the description.
 - starter_code must define exactly the function named function_name.
+- extra_inputs is a list of INPUTS ONLY (each item has the same shape as a
+  test's "input": a JSON array of positional args). Do NOT include expected
+  values — reference_solution will be run on them to compute the answers.
+  Provide 15-30 that stress edge cases: empty/minimal inputs, single elements,
+  duplicates, negatives, zeros, boundary values, and larger inputs. Every extra
+  input MUST be valid per the constraints (the reference will be called on it).
 
 CRITICAL self-consistency requirement:
 - reference_solution is a full, correct implementation, not a stub.

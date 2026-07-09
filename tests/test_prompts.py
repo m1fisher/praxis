@@ -1,6 +1,12 @@
 """Tests for prompt construction (backend/prompts.py)."""
 
-from backend.prompts import build_user_prompt, build_repair_prompt
+from backend.prompts import SYSTEM_PROMPT, build_user_prompt, build_repair_prompt
+
+
+def test_system_prompt_requests_reference_and_extra_inputs():
+    # The self-check needs a reference; the expanded suite needs inputs-only.
+    assert "reference_solution" in SYSTEM_PROMPT
+    assert "extra_inputs" in SYSTEM_PROMPT
 
 
 class TestUserPrompt:

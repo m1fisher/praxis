@@ -10,6 +10,46 @@ exception handling with partial stdout, and single-arg wrapping.
 
 import contextlib
 import io
+import json
+
+
+def derive_tests(fn, inputs):
+    """Mirror of buildDeriveHarness: run the reference on inputs-only to produce
+    {input, expected}; skip inputs that raise or produce non-JSON output."""
+    out = []
+    for inp in inputs:
+        args = inp if isinstance(inp, (list, tuple)) else [inp]
+        try:
+            got = fn(*args)
+            json.dumps(got)  # keep only JSON-serializable outputs
+            out.append({"input": list(args), "expected": got})
+        except Exception:  # noqa: BLE001
+            pass
+    return out
+
+
+def test_derive_computes_expected_from_reference():
+    res = derive_tests(lambda a, b: a + b, [[1, 2], [10, 20], [0, 0]])
+    assert res == [
+        {"input": [1, 2], "expected": 3},
+        {"input": [10, 20], "expected": 30},
+        {"input": [0, 0], "expected": 0},
+    ]
+
+
+def test_derive_wraps_single_nonlist_input():
+    res = derive_tests(lambda x: x * x, [4, 5])
+    assert res == [{"input": [4], "expected": 16}, {"input": [5], "expected": 25}]
+
+
+def test_derive_skips_inputs_that_error():
+    res = derive_tests(lambda xs: xs[0], [[[1, 2]], [[]]])  # 2nd raises IndexError
+    assert res == [{"input": [[1, 2]], "expected": 1}]
+
+
+def test_derive_skips_non_serializable_outputs():
+    res = derive_tests(lambda n: {1, 2, n}, [[3]])  # set() isn't JSON-serializable
+    assert res == []
 
 
 def run_against_tests(fn, tests):
