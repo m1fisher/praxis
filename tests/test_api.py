@@ -130,3 +130,27 @@ class TestGenerateEndpoint:
         # Empty topic fails pydantic's min_length before any provider work.
         r = client.post("/api/generate", json={"topic": ""}, headers=AUTH)
         assert r.status_code == 422
+
+
+class TestDemoProvider:
+    def test_config_reports_demo_off_by_default(self):
+        body = client.get("/api/config").json()
+        assert body == {"demo": False, "demo_model": None}
+
+    def test_config_reports_demo_when_enabled(self, monkeypatch):
+        monkeypatch.setattr(main.llm, "DEMO_ENABLED", True)
+        monkeypatch.setattr(main.llm, "DEMO_MODEL", "llama-demo")
+        assert client.get("/api/config").json() == {"demo": True, "demo_model": "llama-demo"}
+
+    def test_demo_generate_needs_no_key(self, monkeypatch):
+        # provider=demo skips the API-key requirement and reaches generate_problem.
+        seen = {}
+        monkeypatch.setattr(main, "generate_problem", lambda **kw: seen.update(kw) or {"ok": True})
+        r = client.post("/api/generate", json={"topic": "t"}, headers={"X-Provider": "demo"})
+        assert r.status_code == 200
+        assert seen["provider"] == "demo"
+
+    def test_demo_unconfigured_returns_503(self):
+        # Real generate_problem with demo disabled -> 503 (not a 401 about a key).
+        r = client.post("/api/generate", json={"topic": "t"}, headers={"X-Provider": "demo"})
+        assert r.status_code == 503

@@ -24,7 +24,14 @@ const MAX_GEN_ATTEMPTS = 3;
 // the resolved model *before* the response arrives. The response also echoes
 // the authoritative model, which we prefer once we have it.
 const DEFAULT_MODELS = { anthropic: "claude-sonnet-4-6", openai: "gpt-5.4-mini" };
-function resolvedModel() { return LS.model || DEFAULT_MODELS[LS.provider] || LS.provider; }
+
+// Whether the host has configured a free "demo" provider (set by /api/config).
+let demoConfig = { available: false, model: null };
+
+function resolvedModel() {
+  if (LS.provider === "demo") return demoConfig.model || "demo";
+  return LS.model || DEFAULT_MODELS[LS.provider] || LS.provider;
+}
 
 // Pure helpers + saved-library primitives — defined in lib.js so they can be
 // unit-tested in isolation (see tests-js/lib.test.js). If lib.js didn't load
@@ -86,9 +93,48 @@ function onModelSelectChange() {
   if (custom) $("model").focus();
 }
 
+// Demo provider needs no key/model — hide those fields and show a note.
+function applyProviderUI(provider) {
+  const demo = provider === "demo";
+  $("field-key").hidden = demo;
+  $("field-model").hidden = demo;
+  $("demo-note").hidden = !demo;
+  if (demo) $("demo-note-model").textContent = demoConfig.model || "server default";
+}
+
+function addDemoProviderOption() {
+  const sel = $("provider");
+  if ([...sel.options].some((o) => o.value === "demo")) return;
+  const opt = document.createElement("option");
+  opt.value = "demo";
+  opt.textContent = "Demo (free — no key)";
+  sel.insertBefore(opt, sel.firstChild); // top of the list
+}
+
+// Ask the server whether a free demo provider is configured.
+async function loadConfig() {
+  try {
+    const cfg = await fetch("/api/config").then((r) => r.json());
+    demoConfig = { available: !!cfg.demo, model: cfg.demo_model };
+  } catch {
+    demoConfig = { available: false, model: null };
+  }
+  if (demoConfig.available) addDemoProviderOption();
+  // A stored "demo" choice is invalid if the server no longer offers it.
+  if (!demoConfig.available && LS.provider === "demo") LS.provider = "anthropic";
+  // First-time visitor + demo available → default to the free demo so it just works.
+  if (demoConfig.available && localStorage.getItem("praxis.provider") === null && !LS.key) {
+    LS.provider = "demo";
+  }
+  updateModelIndicator();
+  // Prompt for key setup only when the visitor can't use the keyless demo.
+  if (!LS.key && LS.provider !== "demo") openSettings();
+}
+
 function openSettings() {
   $("provider").value = LS.provider;
   populateModelOptions(LS.provider, LS.model);
+  applyProviderUI(LS.provider);
   $("api-key").value = LS.key;
   $("settings").classList.remove("hidden");
 }
@@ -96,8 +142,12 @@ function closeSettings() { $("settings").classList.add("hidden"); }
 function saveSettings() {
   LS.provider = $("provider").value;
   LS.key = $("api-key").value.trim();
-  const sel = $("model-select").value;
-  LS.model = sel === "__custom__" ? $("model").value.trim() : sel;
+  if (LS.provider === "demo") {
+    LS.model = ""; // demo model is fixed server-side
+  } else {
+    const sel = $("model-select").value;
+    LS.model = sel === "__custom__" ? $("model").value.trim() : sel;
+  }
   updateModelIndicator();
   closeSettings();
 }
@@ -207,7 +257,8 @@ async function fetchProblem(topic, difficulty, repair) {
     headers: {
       "Content-Type": "application/json",
       "X-Provider": LS.provider,
-      "X-Api-Key": LS.key,
+      // Never send the user's key in demo mode — the server uses its own.
+      "X-Api-Key": LS.provider === "demo" ? "" : LS.key,
     },
     body: JSON.stringify({ topic, difficulty, model: LS.model || null, repair: repair || null }),
   });
@@ -221,7 +272,7 @@ async function fetchProblem(topic, difficulty, repair) {
 async function generate() {
   const topic = $("topic").value.trim();
   if (!topic) { toast("Enter a topic first."); return; }
-  if (!LS.key) { toast("Add your API key in ⚙ Key first."); openSettings(); return; }
+  if (LS.provider !== "demo" && !LS.key) { toast("Add your API key in ⚙ Key first."); openSettings(); return; }
 
   const btn = $("generate");
   const original = btn.textContent;
@@ -791,8 +842,12 @@ function boot() {
   $("save-settings").addEventListener("click", saveSettings);
   $("clear-key").addEventListener("click", clearKey);
   $("settings").addEventListener("click", (e) => { if (e.target.id === "settings") closeSettings(); });
-  // Switching provider resets the model list; picking "Custom…" reveals the input.
-  $("provider").addEventListener("change", () => populateModelOptions($("provider").value, ""));
+  // Switching provider updates the key/model UI; picking "Custom…" reveals input.
+  $("provider").addEventListener("change", () => {
+    const p = $("provider").value;
+    applyProviderUI(p);
+    if (p !== "demo") populateModelOptions(p, "");
+  });
   $("model-select").addEventListener("change", onModelSelectChange);
 
   // saved library
@@ -806,6 +861,7 @@ function boot() {
   $("saved-list").addEventListener("click", onSavedListClick);
 
   updateModelIndicator();
+  loadConfig(); // discover whether the free demo provider is available
 
   // Editor + Python runtime are loaded from CDNs and are NOT required for the
   // rest of the UI — isolate their failures so they can't cascade.
@@ -817,8 +873,8 @@ function boot() {
   }
   try { initDivider(); } catch (e) { console.error(e); }
   ensurePyodide().catch((e) => console.error("Pyodide failed to load:", e));
-
-  if (!LS.key) openSettings();
+  // The first-visit key prompt is handled by loadConfig() once demo availability
+  // is known (so demo-capable visitors aren't nagged for a key they don't need).
 }
 
 // app.js sits after the page markup (and before the CDN <script> tags), so the

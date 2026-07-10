@@ -77,6 +77,32 @@ and hit **Generate**.
 
 > First **Run** downloads the Pyodide runtime (~a few MB) once, then caches it.
 
+## Free demo mode (optional — no key for visitors)
+
+Let people try the app without their own API key by pointing a **"Demo"** provider
+at a free, OpenAI-compatible endpoint using a key **you** hold. The key stays in
+server env and is never sent to browsers.
+
+**Defaults target Groq's free tier**, so you only need one env var — a `gsk_...`
+key from [console.groq.com](https://console.groq.com):
+
+```bash
+PRAXIS_DEMO_API_KEY=gsk_your_key_here uv run uvicorn backend.main:app --reload
+```
+
+To use a different provider, override the base URL and model too:
+
+| Provider | `PRAXIS_DEMO_BASE_URL` | `PRAXIS_DEMO_MODEL` (example) |
+|---|---|---|
+| **Groq** (default) | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
+| **Google Gemini** | `https://generativelanguage.googleapis.com/v1beta/openai/` | `gemini-2.0-flash` |
+| **OpenRouter** | `https://openrouter.ai/api/v1` | a `:free` model |
+
+When `PRAXIS_DEMO_API_KEY` is set, a **Demo (free — no key)** option appears in the
+provider dropdown; picking it hides the key field. When unset, the option simply
+doesn't appear. The demo runs on the host's free-tier quota, so keep it behind the
+password gate and expect the occasional rate-limit if it gets busy.
+
 ## Sharing it with someone (temporary)
 
 Expose your locally-running app over a public HTTPS URL via an ephemeral

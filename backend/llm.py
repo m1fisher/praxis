@@ -8,9 +8,22 @@ providers are supported: Anthropic (Claude) and OpenAI.
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 from .prompts import SYSTEM_PROMPT, build_user_prompt, build_repair_prompt
+
+# Optional server-hosted "Demo" provider: a free/cheap OpenAI-COMPATIBLE endpoint
+# using a key the HOST supplies via env, so people can try the app without their
+# own key. The key stays server-side and is never sent to the browser.
+#
+# Defaults target Groq's free tier — so setting just PRAXIS_DEMO_API_KEY (a
+# `gsk_...` key from console.groq.com) is enough to enable it. Override the base
+# URL / model to point at Google Gemini, OpenRouter, Cerebras, etc.
+DEMO_API_KEY = os.environ.get("PRAXIS_DEMO_API_KEY")
+DEMO_BASE_URL = os.environ.get("PRAXIS_DEMO_BASE_URL", "https://api.groq.com/openai/v1")
+DEMO_MODEL = os.environ.get("PRAXIS_DEMO_MODEL", "llama-3.3-70b-versatile")
+DEMO_ENABLED = bool(DEMO_API_KEY)
 
 # Sensible defaults when the user doesn't pick a specific model. These are the
 # user's tokens (BYOK), so we default to strong-but-economical models; the UI
@@ -48,7 +61,6 @@ def generate_problem(
     repair: Any = None,
 ) -> dict[str, Any]:
     provider = (provider or "").strip().lower()
-    model = (model or "").strip() or DEFAULT_MODELS.get(provider)
 
     # On a repair pass, hand the model its own problem plus the self-check
     # mismatches and ask it to fix them — rather than starting over.
@@ -58,9 +70,19 @@ def generate_problem(
     else:
         user_prompt = build_user_prompt(topic, difficulty)
 
-    if provider == "anthropic":
+    if provider == "demo":
+        if not DEMO_ENABLED:
+            raise LLMError("Demo mode isn't available on this server.", status=503)
+        model = DEMO_MODEL  # host-configured; the user's key is ignored
+        raw = _call_openai_compatible(
+            DEMO_API_KEY, model, user_prompt,
+            base_url=DEMO_BASE_URL, json_mode=False, label="Demo",
+        )
+    elif provider == "anthropic":
+        model = (model or "").strip() or DEFAULT_MODELS["anthropic"]
         raw = _call_anthropic(api_key, model, user_prompt)
     elif provider == "openai":
+        model = (model or "").strip() or DEFAULT_MODELS["openai"]
         raw = _call_openai(api_key, model, user_prompt)
     else:
         raise LLMError(f"Unknown provider: {provider!r}", status=400)
@@ -96,28 +118,45 @@ def _call_anthropic(api_key: str, model: str, user_prompt: str) -> str:
 
 
 def _call_openai(api_key: str, model: str, user_prompt: str) -> str:
+    return _call_openai_compatible(api_key, model, user_prompt, label="OpenAI")
+
+
+def _call_openai_compatible(
+    api_key: str,
+    model: str,
+    user_prompt: str,
+    *,
+    base_url: str | None = None,
+    json_mode: bool = True,
+    label: str = "OpenAI",
+) -> str:
+    """Call any OpenAI-compatible chat endpoint (OpenAI, or a `base_url` override
+    for Groq/Gemini/OpenRouter/… in demo mode). `json_mode` off maximizes cross-
+    provider compatibility (not all support response_format); parsing is robust."""
     import openai
 
-    client = openai.OpenAI(api_key=api_key)
+    client = openai.OpenAI(api_key=api_key, base_url=base_url)  # base_url=None => OpenAI
+    params: dict[str, Any] = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+    }
+    if json_mode:
+        params["response_format"] = {"type": "json_object"}
     try:
-        resp = client.chat.completions.create(
-            model=model,
-            response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-        )
+        resp = client.chat.completions.create(**params)
     except openai.AuthenticationError:
-        raise LLMError("Invalid OpenAI API key.", status=401) from None
+        raise LLMError(f"Invalid {label} API key.", status=401) from None
     except openai.PermissionDeniedError:
-        raise LLMError("This OpenAI key can't access that model.", status=403) from None
+        raise LLMError(f"This {label} key can't access that model.", status=403) from None
     except openai.NotFoundError:
         raise LLMError(f"Model not found: {model!r}.", status=404) from None
     except openai.RateLimitError:
-        raise LLMError("OpenAI rate limit hit — try again shortly.", status=429) from None
+        raise LLMError(f"{label} rate limit hit — try again shortly.", status=429) from None
     except openai.APIError as e:
-        raise LLMError(f"OpenAI error: {e}", status=502) from None
+        raise LLMError(f"{label} error: {e}", status=502) from None
 
     return resp.choices[0].message.content or ""
 

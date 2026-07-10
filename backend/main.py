@@ -17,6 +17,7 @@ from fastapi import FastAPI, Header, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from . import llm
 from .llm import generate_problem, LLMError
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
@@ -84,14 +85,22 @@ class GenerateRequest(BaseModel):
     repair: RepairContext | None = None
 
 
+@app.get("/api/config")
+def config() -> dict:
+    """Public, no-auth-needed surface config so the frontend can show the demo
+    option only when the host has configured it."""
+    return {"demo": llm.DEMO_ENABLED, "demo_model": llm.DEMO_MODEL if llm.DEMO_ENABLED else None}
+
+
 @app.post("/api/generate")
 def generate(
     req: GenerateRequest,
     x_provider: str = Header(..., alias="X-Provider"),
-    x_api_key: str = Header(..., alias="X-Api-Key"),
+    x_api_key: str = Header("", alias="X-Api-Key"),
 ) -> dict:
-    """Generate a coding problem using the caller's own API key."""
-    if not x_api_key.strip():
+    """Generate a coding problem. Uses the caller's own API key, except for the
+    host-configured "demo" provider (no key required)."""
+    if x_provider.strip().lower() != "demo" and not x_api_key.strip():
         raise HTTPException(status_code=401, detail="Missing API key.")
     try:
         return generate_problem(

@@ -77,12 +77,18 @@
         <option value="openai">OpenAI</option>
       </select>
 
-      <label>API key</label>
-      <input id="api-key" type="password" placeholder="sk-ant-… or sk-…" autocomplete="off" />
+      <div id="demo-note" class="muted" hidden>Free demo — no key needed. Model: <code id="demo-note-model"></code></div>
 
-      <label>Model</label>
-      <select id="model-select"></select>
-      <input id="model" type="text" placeholder="Enter a model id" autocomplete="off" class="model-custom" hidden />
+      <div id="field-key">
+        <label>API key</label>
+        <input id="api-key" type="password" placeholder="sk-ant-… or sk-…" autocomplete="off" />
+      </div>
+
+      <div id="field-model">
+        <label>Model</label>
+        <select id="model-select"></select>
+        <input id="model" type="text" placeholder="Enter a model id" autocomplete="off" class="model-custom" hidden />
+      </div>
 
       <div class="modal-actions">
         <button id="clear-key" class="btn ghost">Clear</button>

@@ -144,6 +144,33 @@ class TestGenerateOrchestration:
             )
         assert ei.value.status == 400
 
+    def test_demo_routes_to_configured_endpoint(self, monkeypatch):
+        monkeypatch.setattr(llm, "DEMO_ENABLED", True)
+        monkeypatch.setattr(llm, "DEMO_API_KEY", "demo-key")
+        monkeypatch.setattr(llm, "DEMO_BASE_URL", "https://api.groq.com/openai/v1")
+        monkeypatch.setattr(llm, "DEMO_MODEL", "llama-demo")
+        seen = {}
+
+        def fake(api_key, model, user_prompt, *, base_url=None, json_mode=True, label="OpenAI"):
+            seen.update(api_key=api_key, model=model, base_url=base_url, json_mode=json_mode, label=label)
+            return raw()
+
+        monkeypatch.setattr(llm, "_call_openai_compatible", fake)
+        p = generate_problem(provider="demo", api_key="", model=None, topic="t", difficulty="Easy")
+
+        assert seen["base_url"] == "https://api.groq.com/openai/v1"
+        assert seen["model"] == "llama-demo"
+        assert seen["api_key"] == "demo-key"      # host key, not the (empty) user key
+        assert seen["json_mode"] is False          # max cross-provider compatibility
+        assert seen["label"] == "Demo"
+        assert p["model"] == "llama-demo"          # echoed to the UI
+
+    def test_demo_unconfigured_raises_503(self):
+        # DEMO_ENABLED is False by default in the test environment.
+        with pytest.raises(LLMError) as ei:
+            generate_problem(provider="demo", api_key="", model=None, topic="t", difficulty="Easy")
+        assert ei.value.status == 503
+
 
 # --------------------------------------------------------------------------- #
 # provider exception -> status mapping
